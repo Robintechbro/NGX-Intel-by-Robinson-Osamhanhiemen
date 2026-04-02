@@ -1,7 +1,30 @@
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Modality } from "@google/genai";
 import { StockData, SearchResult, MarketTrends } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+
+export async function textToSpeech(text: string): Promise<string | null> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash-preview-tts",
+      contents: [{ parts: [{ text: `Read this stock analysis summary clearly: ${text}` }] }],
+      config: {
+        responseModalities: [Modality.AUDIO],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: 'Kore' },
+          },
+        },
+      },
+    });
+
+    const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+    return base64Audio || null;
+  } catch (error) {
+    console.error("Gemini TTS Error:", error);
+    return null;
+  }
+}
 
 export async function getMarketTrends(): Promise<MarketTrends> {
   try {
@@ -65,8 +88,16 @@ export async function analyzeQuery(query: string): Promise<SearchResult> {
           JSON STRUCTURE:
           Return strictly valid JSON matching these rules:
           1. For 'analysis': { "type": "analysis", "data": { ...StockData } }
-          2. For 'comparison': { "type": "comparison", "data": [ { ...StockData }, { ...StockData } ], "message": "A plain English summary of the comparison" }
-          3. For 'discovery': { "type": "discovery", "data": [ { ...StockData }, ... ] }
+          2. For 'comparison': { 
+               "type": "comparison", 
+               "data": [ { ...StockData }, { ...StockData } ], 
+               "message": "A detailed, beginner-friendly comparison in Markdown. Explain why one might be better than the other for different types of investors (e.g., growth seekers vs. dividend hunters). Explain any complex financial jargon used." 
+             }
+          3. For 'discovery': { 
+               "type": "discovery", 
+               "data": [ { ...StockData }, ... ],
+               "message": "A brief, beginner-friendly explanation of why these stocks were selected based on the user's query."
+             }
           
           STOCK DATA RULES:
           - Always include currency symbol (₦).
@@ -74,7 +105,11 @@ export async function analyzeQuery(query: string): Promise<SearchResult> {
           - Provide 'historicalData' with keys '1D', '1M', '1Y' containing at least 10 points each.
           - Include 'splits' array if any stock splits or reverse splits have occurred. Each split should have 'date', 'ratio', 'type' ('split' or 'reverse'), and 'description'.
           - Include 'news' array with 3-5 latest news items. Each item should have 'headline', 'source', 'date', and 'url'.
-          - 'aiSummary' should be beginner-friendly markdown.
+          - 'aiSummary' MUST be a detailed, beginner-friendly analysis in Markdown. 
+            - Use headers (###) for sections like "Market Position", "Financial Health", and "Investor Outlook".
+            - Explain complex terms in parentheses, e.g., "P/E Ratio (Price-to-Earnings Ratio, which shows how much investors are willing to pay for every ₦1 of profit)".
+            - Use bullet points for key takeaways.
+            - Keep the tone professional yet accessible.
           - 'investmentScore' (0-100) based on stability, dividends, and growth.
           - 'metrics' should include 3 key indicators (e.g., Growth, Dividends, Risk).
           - 'lastUpdated': The timestamp of the data you found (e.g., "2024-03-20 14:30 WAT").

@@ -1,0 +1,89 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    // Collection: users
+    // Document ID: {uid}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - displayName: string (optional)
+    //   - isPremium: boolean (required)
+    //   - searchCount: number (required)
+    //   - trendsClickCount: number (required)
+    //   - createdAt: timestamp (optional)
+    //
+    // Collection: feedback
+    // Document ID: {feedbackId}
+    // Fields:
+    //   - uid: string (required)
+    //   - email: string (required)
+    //   - type: string (required, 'suggestion' or 'issue')
+    //   - message: string (required)
+    //   - createdAt: timestamp (required)
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && request.auth.token.email == "Sasdraze@gmail.com";
+    }
+
+    function isValidUser(data) {
+      return data.keys().hasAll(['uid', 'email', 'isPremium', 'searchCount', 'trendsClickCount']) &&
+             data.uid is string &&
+             data.email is string &&
+             data.isPremium is bool &&
+             data.searchCount is number &&
+             data.trendsClickCount is number;
+    }
+
+    match /users/{userId} {
+      // Users can read their own profile, admins can read all
+      allow read: if isOwner(userId) || isAdmin();
+      
+      // Users can create their own profile on first login
+      // For testing phase, we allow isPremium to be true
+      allow create: if isOwner(userId) && 
+                      isValidUser(request.resource.data) &&
+                      request.resource.data.searchCount == 0 &&
+                      request.resource.data.trendsClickCount == 0;
+      
+      // Users can update their own counts, admins can update anything
+      allow update: if (isOwner(userId) && 
+                      isValidUser(request.resource.data) &&
+                      request.resource.data.isPremium == resource.data.isPremium &&
+                      request.resource.data.uid == resource.data.uid &&
+                      request.resource.data.email == resource.data.email) || isAdmin();
+    }
+
+    match /feedback/{feedbackId} {
+      // Only admins can read feedback
+      allow read: if isAdmin();
+      
+      // Authenticated users can create feedback
+      allow create: if isAuthenticated() && 
+                      request.resource.data.uid == request.auth.uid &&
+                      request.resource.data.email == request.auth.token.email &&
+                      request.resource.data.type in ['suggestion', 'issue'] &&
+                      request.resource.data.message is string &&
+                      request.resource.data.message.size() > 0 &&
+                      request.resource.data.message.size() < 5000 &&
+                      request.resource.data.createdAt == request.time;
+    }
+
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

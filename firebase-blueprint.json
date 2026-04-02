@@ -1,0 +1,42 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Stores user subscription and usage data",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user" },
+        "email": { "type": "string", "description": "The email address of the user" },
+        "displayName": { "type": "string", "description": "The display name of the user" },
+        "isPremium": { "type": "boolean", "description": "Whether the user has a premium subscription" },
+        "searchCount": { "type": "number", "description": "Number of searches performed" },
+        "trendsClickCount": { "type": "number", "description": "Number of times market trends were viewed" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the profile was created" }
+      },
+      "required": ["uid", "email", "isPremium", "searchCount", "trendsClickCount"]
+    },
+    "Feedback": {
+      "title": "User Feedback",
+      "description": "Stores user suggestions and issue reports",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user who submitted the feedback" },
+        "email": { "type": "string", "description": "The email address of the user" },
+        "type": { "type": "string", "enum": ["suggestion", "issue"], "description": "The type of feedback" },
+        "message": { "type": "string", "description": "The feedback message" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the feedback was submitted" }
+      },
+      "required": ["uid", "email", "type", "message", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{uid}": {
+      "schema": "User",
+      "description": "User profile documents"
+    },
+    "/feedback/{feedbackId}": {
+      "schema": "Feedback",
+      "description": "User feedback submissions"
+    }
+  }
+}
