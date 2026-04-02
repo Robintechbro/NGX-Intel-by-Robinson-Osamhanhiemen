@@ -40,7 +40,8 @@ import {
   VolumeX,
   Pause,
   Play,
-  MessageSquare
+  MessageSquare,
+  Menu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeQuery, refreshStocks, getMarketTrends } from './services/geminiService';
@@ -349,10 +350,10 @@ const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, onViewD
     {/* Hero Section */}
     <div className={cn("flex flex-col gap-8 items-start", compact ? "" : "md:flex-row")}>
       <div className="flex-1 bg-card border border-border p-8 rounded-3xl w-full">
-        <div className="flex justify-between items-start mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start mb-6 gap-4 sm:gap-0">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h2 className={cn("font-bold", compact ? "text-xl" : "text-3xl")}>{stock.name}</h2>
+            <div className="flex flex-wrap items-center gap-3 mb-2">
+              <h2 className={cn("font-bold", compact ? "text-xl" : "text-2xl md:text-3xl")}>{stock.name}</h2>
               <span className="px-3 py-1 bg-green-500/10 text-green-500 text-xs font-bold rounded-full border border-green-500/20">
                 {stock.symbol}
               </span>
@@ -779,13 +780,13 @@ const CompareModal = ({ stock, isOpen, onClose, onCompare }: { stock: StockData,
       <motion.div 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-card border border-border p-8 rounded-[2rem] w-full max-w-md relative"
+        className="bg-card border border-border p-6 md:p-8 rounded-2xl md:rounded-[2rem] w-full max-w-md relative"
       >
-        <button onClick={onClose} className="absolute top-6 right-6 text-gray-500 hover:text-foreground">
+        <button onClick={onClose} className="absolute top-4 right-4 md:top-6 md:right-6 text-gray-500 hover:text-foreground">
           <X size={20} />
         </button>
-        <h3 className="text-2xl font-bold mb-2 text-foreground">Compare Stocks</h3>
-        <p className="text-gray-500 text-sm mb-8">Compare {stock.symbol} with another NGX listed company.</p>
+        <h3 className="text-xl md:text-2xl font-bold mb-2 text-foreground">Compare Stocks</h3>
+        <p className="text-gray-500 text-xs md:text-sm mb-6 md:mb-8">Compare {stock.symbol} with another NGX listed company.</p>
         
         <div className="space-y-6">
           <div>
@@ -827,16 +828,16 @@ const LessonModal = ({ lesson, isOpen, onClose }: { lesson: any, isOpen: boolean
       <motion.div 
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="bg-card border border-border p-0 rounded-[2.5rem] w-full max-w-4xl max-h-[90vh] overflow-hidden relative flex flex-col"
+        className="bg-card border border-border p-0 rounded-2xl md:rounded-[2.5rem] w-full max-w-4xl max-h-[90vh] overflow-hidden relative flex flex-col"
       >
-        <div className="p-8 border-b border-border flex justify-between items-center bg-foreground/5">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-500/10 text-blue-500 rounded-2xl flex items-center justify-center">
+        <div className="p-4 md:p-8 border-b border-border flex justify-between items-center bg-foreground/5">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-blue-500/10 text-blue-500 rounded-xl md:rounded-2xl flex items-center justify-center shrink-0">
               {lesson.icon}
             </div>
             <div>
-              <h3 className="text-2xl font-bold text-foreground">{lesson.title}</h3>
-              <div className="flex items-center gap-3 text-xs text-gray-500 mt-1">
+              <h3 className="text-lg md:text-2xl font-bold text-foreground line-clamp-1">{lesson.title}</h3>
+              <div className="flex items-center gap-2 md:gap-3 text-[10px] md:text-xs text-gray-500 mt-0.5 md:mt-1">
                 <span className="px-2 py-0.5 bg-blue-500/10 text-blue-500 rounded-full border border-blue-500/20 font-bold uppercase">{lesson.level}</span>
                 <span>•</span>
                 <span>{lesson.time}</span>
@@ -844,20 +845,20 @@ const LessonModal = ({ lesson, isOpen, onClose }: { lesson: any, isOpen: boolean
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-foreground/10 rounded-full transition-colors text-gray-500 hover:text-foreground">
-            <X size={24} />
+            <X size={20} className="md:size-24" />
           </button>
         </div>
         
-        <div className="p-10 overflow-y-auto flex-1 custom-scrollbar">
-          <div className="prose prose-invert max-w-none text-gray-400 leading-relaxed text-lg">
+        <div className="p-6 md:p-10 overflow-y-auto flex-1 custom-scrollbar">
+          <div className="prose prose-invert max-w-none text-gray-400 leading-relaxed text-base md:text-lg">
             <ReactMarkdown>{lesson.fullContent || lesson.content}</ReactMarkdown>
           </div>
         </div>
 
-        <div className="p-8 border-t border-border bg-foreground/5 flex justify-end">
+        <div className="p-4 md:p-8 border-t border-border bg-foreground/5 flex justify-end">
           <button 
             onClick={onClose}
-            className="px-8 py-3 bg-foreground text-background font-bold rounded-2xl hover:opacity-90 transition-all"
+            className="w-full md:w-auto px-8 py-3 bg-foreground text-background font-bold rounded-xl md:rounded-2xl hover:opacity-90 transition-all"
           >
             Finished Reading
           </button>
@@ -924,9 +925,9 @@ const AuthModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-md bg-card border border-border rounded-3xl shadow-2xl overflow-hidden p-8"
+        className="relative w-full max-w-md bg-card border border-border rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden p-6 md:p-8"
       >
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 md:mb-8">
           <div className="w-12 h-12 bg-green-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <TrendingUp size={24} className="text-white" />
           </div>
@@ -1030,33 +1031,33 @@ const LandingPage = ({ onSignIn }: { onSignIn: () => void }) => {
           <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">The Future of NGX Investing</span>
         </div>
         
-        <h1 className="text-6xl md:text-8xl font-bold tracking-tighter leading-[0.9]">
+        <h1 className="text-4xl md:text-8xl font-bold tracking-tighter leading-[1.1] md:leading-[0.9]">
           Analyze the Market <br />
           <span className="text-green-500">Like a Pro.</span>
         </h1>
         
-        <p className="text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed">
+        <p className="text-lg md:text-xl text-gray-500 max-w-2xl mx-auto leading-relaxed px-4">
           NGX Intel provides real-time insights, AI-powered stock analysis, and 
           comprehensive learning tools for the Nigerian Stock Exchange.
         </p>
         
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-6 w-full px-6">
           <button 
             onClick={onSignIn}
-            className="px-10 py-5 bg-foreground text-background font-bold rounded-2xl hover:opacity-90 transition-all flex items-center gap-3 text-lg group"
+            className="w-full sm:w-auto px-10 py-5 bg-foreground text-background font-bold rounded-2xl hover:opacity-90 transition-all flex items-center justify-center gap-3 text-lg group"
           >
             Get Started Now
             <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
           </button>
           <button 
             onClick={() => window.open('https://ngxgroup.com/', '_blank')}
-            className="px-10 py-5 bg-foreground/5 border border-border text-foreground font-bold rounded-2xl hover:bg-foreground/10 transition-all text-lg"
+            className="w-full sm:w-auto px-10 py-5 bg-foreground/5 border border-border text-foreground font-bold rounded-2xl hover:bg-foreground/10 transition-all text-lg"
           >
             Explore Market
           </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-20">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-12 md:pt-20 px-6">
           {[
             { icon: <Zap className="text-yellow-500" />, title: "AI Analysis", desc: "Instant insights on any NGX stock using Gemini Pro." },
             { icon: <TrendingUp className="text-green-500" />, title: "Real-time Data", desc: "Live price feeds and market movement tracking." },
@@ -1137,9 +1138,9 @@ const FeedbackModal = ({ isOpen, onClose, user }: { isOpen: boolean, onClose: ()
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         exit={{ opacity: 0, scale: 0.95, y: 20 }}
-        className="relative w-full max-w-md bg-card border border-border rounded-3xl shadow-2xl overflow-hidden p-8"
+        className="relative w-full max-w-md bg-card border border-border rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden p-6 md:p-8"
       >
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 md:mb-8">
           <div className="w-12 h-12 bg-blue-500 rounded-2xl flex items-center justify-center mx-auto mb-4">
             <Bell size={24} className="text-white" />
           </div>
@@ -1209,17 +1210,17 @@ const FeedbackModal = ({ isOpen, onClose, user }: { isOpen: boolean, onClose: ()
 
 const VoiceAgent = ({ onCommand, isListening, startListening }: { onCommand: (cmd: string) => void, isListening: boolean, startListening: () => void }) => {
   return (
-    <div className="fixed bottom-8 right-8 z-50 flex flex-col items-end gap-4">
+    <div className="fixed bottom-4 right-4 md:bottom-8 md:right-8 z-50 flex flex-col items-end gap-4">
       <AnimatePresence>
         {isListening && (
           <motion.div 
             initial={{ opacity: 0, scale: 0.8, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
-            className="bg-card border border-border p-4 rounded-2xl shadow-2xl flex items-center gap-4 mb-2"
+            className="bg-card border border-border p-3 md:p-4 rounded-2xl shadow-2xl flex items-center gap-3 md:gap-4 mb-2 max-w-[280px] md:max-w-none"
           >
-            <div className="w-10 h-10 bg-green-500 rounded-full flex items-center justify-center animate-pulse">
-              <Mic size={20} className="text-white" />
+            <div className="w-8 h-8 md:w-10 md:h-10 bg-green-500 rounded-full flex items-center justify-center animate-pulse shrink-0">
+              <Mic size={18} className="text-white" />
             </div>
             <div>
               <p className="text-xs font-bold text-foreground">Listening...</p>
@@ -1234,18 +1235,18 @@ const VoiceAgent = ({ onCommand, isListening, startListening }: { onCommand: (cm
         whileTap={{ scale: 0.95 }}
         onClick={startListening}
         className={cn(
-          "w-16 h-16 rounded-full shadow-2xl flex items-center justify-center transition-all duration-500 border-4 border-background",
+          "w-14 h-14 md:w-16 md:h-16 rounded-full shadow-2xl flex items-center justify-center transition-all duration-500 border-4 border-background",
           isListening ? "bg-green-500 text-white scale-110" : "bg-foreground text-background hover:bg-green-500 hover:text-white"
         )}
       >
         {isListening ? (
           <div className="flex gap-1">
-            <motion.div animate={{ height: [10, 20, 10] }} transition={{ repeat: Infinity, duration: 0.5 }} className="w-1 bg-white rounded-full" />
-            <motion.div animate={{ height: [20, 10, 20] }} transition={{ repeat: Infinity, duration: 0.5 }} className="w-1 bg-white rounded-full" />
-            <motion.div animate={{ height: [10, 20, 10] }} transition={{ repeat: Infinity, duration: 0.5 }} className="w-1 bg-white rounded-full" />
+            <motion.div animate={{ height: [8, 16, 8] }} transition={{ repeat: Infinity, duration: 0.5 }} className="w-1 bg-white rounded-full" />
+            <motion.div animate={{ height: [16, 8, 16] }} transition={{ repeat: Infinity, duration: 0.5 }} className="w-1 bg-white rounded-full" />
+            <motion.div animate={{ height: [8, 16, 8] }} transition={{ repeat: Infinity, duration: 0.5 }} className="w-1 bg-white rounded-full" />
           </div>
         ) : (
-          <Bot size={32} />
+          <Bot size={28} className="md:size-32" />
         )}
       </motion.button>
     </div>
@@ -1341,6 +1342,7 @@ export default function App() {
   const [marketTrends, setMarketTrends] = useState<MarketTrends | null>(null);
   const [isTrendsLoading, setIsTrendsLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const saved = localStorage.getItem('ngx-intel-theme');
     return (saved as 'dark' | 'light') || 'dark';
@@ -1801,7 +1803,119 @@ export default function App() {
         startListening={handleVoiceSearch} 
         onCommand={(cmd) => handleSearch(undefined, cmd)} 
       />
-      {/* Sidebar */}
+
+      {/* Mobile Menu Overlay */}
+      <AnimatePresence>
+        {isMobileMenuOpen && (
+          <>
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsMobileMenuOpen(false)}
+              className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[60] lg:hidden"
+            />
+            <motion.aside 
+              initial={{ x: -300 }}
+              animate={{ x: 0 }}
+              exit={{ x: -300 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 200 }}
+              className="fixed inset-y-0 left-0 w-72 bg-card border-r border-border z-[70] flex flex-col p-6 lg:hidden"
+            >
+              <div className="flex items-center justify-between mb-10">
+                <div className="flex items-center gap-2 cursor-pointer" onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }}>
+                  <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                    <TrendingUp size={20} className="text-white" />
+                  </div>
+                  <span className="text-xl font-bold tracking-tight">NGX Intel</span>
+                </div>
+                <button onClick={() => setIsMobileMenuOpen(false)} className="p-2 hover:bg-foreground/5 rounded-xl transition-all">
+                  <X size={20} className="text-gray-500" />
+                </button>
+              </div>
+
+              <nav className="space-y-1 flex-1">
+                <SidebarItem 
+                  icon={LayoutDashboard} 
+                  label="Dashboard" 
+                  active={activeTab === 'dashboard'} 
+                  onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }} 
+                />
+                <SidebarItem 
+                  icon={Compass} 
+                  label="Explorer" 
+                  active={activeTab === 'explorer' || activeTab === 'discovery'} 
+                  onClick={() => { setActiveTab('explorer'); setIsMobileMenuOpen(false); }} 
+                />
+                <SidebarItem 
+                  icon={Bookmark} 
+                  label="Watchlist" 
+                  active={activeTab === 'watchlist'} 
+                  onClick={() => { setActiveTab('watchlist'); setIsMobileMenuOpen(false); }} 
+                />
+                <SidebarItem 
+                  icon={PieChart} 
+                  label="Market Trends" 
+                  active={activeTab === 'trends'} 
+                  onClick={() => { setActiveTab('trends'); setIsMobileMenuOpen(false); }} 
+                />
+                <div className="pt-4 pb-2 px-4">
+                  <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">Learning</span>
+                </div>
+                <SidebarItem 
+                  icon={BookOpen} 
+                  label="Academy" 
+                  active={activeTab === 'academy'} 
+                  onClick={() => { setActiveTab('academy'); setIsMobileMenuOpen(false); }} 
+                />
+                <SidebarItem 
+                  icon={Bell} 
+                  label="Feedback" 
+                  active={false} 
+                  onClick={() => { setIsFeedbackModalOpen(true); setIsMobileMenuOpen(false); }} 
+                />
+              </nav>
+
+              <div className="mt-auto pt-6 border-t border-border">
+                {user ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 px-4 py-3 bg-foreground/5 rounded-xl">
+                      <div className="w-10 h-10 bg-foreground/10 rounded-full flex items-center justify-center overflow-hidden">
+                        {user.photoURL ? (
+                          <img src={user.photoURL} alt={user.displayName || ''} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <UserIcon size={20} className="text-gray-400" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold truncate">{user.displayName || 'Investor'}</p>
+                        <p className="text-[10px] text-gray-500 truncate">
+                          {isAdmin ? 'Admin' : (userProfile?.isPremium ? 'Premium Plan' : 'Freemium Plan')}
+                        </p>
+                      </div>
+                    </div>
+                    <button 
+                      onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
+                      className="w-full py-3 bg-foreground/5 text-gray-500 font-bold rounded-xl hover:bg-red-500/10 hover:text-red-500 transition-all flex items-center justify-center gap-2"
+                    >
+                      <LogOut size={16} /> Logout
+                    </button>
+                  </div>
+                ) : (
+                  <button 
+                    onClick={() => { handleLogin(); setIsMobileMenuOpen(false); }}
+                    className="w-full py-4 bg-foreground text-background font-bold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                  >
+                    <UserIcon size={20} /> Sign In
+                  </button>
+                )}
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Sidebar (Desktop) */}
       <aside className="w-64 border-r border-border bg-card flex flex-col p-4 hidden lg:flex">
         <div className="flex items-center gap-2 px-4 mb-10 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
           <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
@@ -1904,8 +2018,28 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* Top Header */}
-        <header className="h-16 border-b border-border flex items-center justify-between px-8 bg-background/80 backdrop-blur-md z-10">
-          <div className="flex-1 max-w-2xl">
+        <header className="h-auto lg:h-16 border-b border-border flex flex-col lg:flex-row items-center justify-between px-4 lg:px-8 py-4 lg:py-0 bg-background/80 backdrop-blur-md z-10 gap-4 lg:gap-0">
+          <div className="flex items-center justify-between w-full lg:hidden">
+            <div className="flex items-center gap-2 cursor-pointer" onClick={() => setActiveTab('dashboard')}>
+              <div className="w-8 h-8 bg-green-500 rounded-lg flex items-center justify-center">
+                <TrendingUp size={20} className="text-white" />
+              </div>
+              <span className="text-lg font-bold tracking-tight">NGX Intel</span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button 
+                onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
+                className="p-2 bg-foreground/5 rounded-xl hover:bg-foreground/10 transition-all border border-border text-gray-500 hover:text-foreground"
+              >
+                {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
+              </button>
+              <button onClick={() => setIsMobileMenuOpen(true)} className="p-2 bg-foreground/5 rounded-xl hover:bg-foreground/10 transition-all border border-border">
+                <Menu size={20} className="text-gray-500" />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex-1 w-full lg:max-w-2xl">
             <form onSubmit={handleSearch} className="relative group">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 group-focus-within:text-green-500 transition-colors" size={18} />
               <input 
@@ -1935,7 +2069,7 @@ export default function App() {
             </form>
           </div>
           
-          <div className="flex items-center gap-6 ml-8">
+          <div className="hidden lg:flex items-center gap-6 ml-8">
             <button 
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className="p-2 bg-foreground/5 rounded-xl hover:bg-foreground/10 transition-all border border-border text-gray-500 hover:text-foreground"
@@ -1966,7 +2100,7 @@ export default function App() {
         </header>
 
         {/* Scrollable Area */}
-        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
           <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && (
               <motion.div 
@@ -1986,8 +2120,8 @@ export default function App() {
                     <Zap size={12} className="fill-green-500" />
                     AI-Powered Market Intelligence
                   </motion.div>
-                  <h1 className="text-6xl font-bold tracking-tight bg-gradient-to-r from-foreground via-gray-500 to-gray-700 bg-clip-text text-transparent leading-tight">
-                    Smart Stock Intelligence <br /> for Nigerian Investors
+                  <h1 className="text-3xl md:text-6xl font-bold tracking-tight bg-gradient-to-r from-foreground via-gray-500 to-gray-700 bg-clip-text text-transparent leading-tight">
+                    Smart Stock Intelligence <br className="hidden md:block" /> for Nigerian Investors
                   </h1>
                   <p className="text-gray-500 text-xl max-w-2xl mx-auto leading-relaxed">
                     Analyze NGX companies, compare performance, and understand the market in plain English.
@@ -2187,14 +2321,14 @@ export default function App() {
                 key="watchlist"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="max-w-6xl mx-auto space-y-8"
+                className="max-w-6xl mx-auto space-y-8 pb-20"
               >
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
                   <div>
-                    <h2 className="text-3xl font-bold">My Watchlist</h2>
-                    <p className="text-gray-500">Track your favorite companies and their performance.</p>
+                    <h2 className="text-2xl md:text-3xl font-bold">My Watchlist</h2>
+                    <p className="text-gray-500 text-sm">Track your favorite companies and their performance.</p>
                   </div>
-                  <div className="text-right">
+                  <div className="text-left sm:text-right">
                     <div className="text-2xl font-bold">{watchlist.length}</div>
                     <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Companies</div>
                   </div>
@@ -2343,12 +2477,12 @@ export default function App() {
                 key="explorer"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="max-w-6xl mx-auto space-y-12 pb-20"
+                className="max-w-6xl mx-auto space-y-8 lg:space-y-12 pb-20"
               >
-                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
                   <div>
-                    <h2 className="text-3xl font-bold">Market Explorer</h2>
-                    <p className="text-gray-500">Discover companies across different sectors and sizes of the NGX.</p>
+                    <h2 className="text-2xl md:text-3xl font-bold">Market Explorer</h2>
+                    <p className="text-gray-500 text-sm">Discover companies across different sectors and sizes of the NGX.</p>
                   </div>
                   <button 
                     onClick={() => {
@@ -2361,7 +2495,7 @@ export default function App() {
                       handleSearch(undefined, q);
                     }}
                     disabled={loading}
-                    className="px-8 py-3 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-all flex items-center gap-2 disabled:opacity-50"
+                    className="w-full md:w-auto px-8 py-3 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-all flex items-center justify-center gap-2 disabled:opacity-50"
                   >
                     {loading ? <Loader2 className="animate-spin" size={18} /> : <Search size={18} />}
                     Search Market
@@ -2497,13 +2631,13 @@ export default function App() {
                 key="trends"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="max-w-6xl mx-auto space-y-8"
+                className="max-w-6xl mx-auto space-y-8 pb-20"
               >
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
                   <div>
-                    <h2 className="text-3xl font-bold">Market Trends</h2>
-                    <div className="flex items-center gap-2">
-                      <p className="text-gray-500">Real-time insights into the Nigerian Exchange performance.</p>
+                    <h2 className="text-2xl md:text-3xl font-bold">Market Trends</h2>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-gray-500 text-sm">Real-time insights into the Nigerian Exchange performance.</p>
                       {marketTrends?.lastUpdated && (
                         <span className="text-[10px] text-gray-500 bg-foreground/5 px-2 py-0.5 rounded-full">
                           Updated: {marketTrends.lastUpdated}
@@ -2621,12 +2755,12 @@ export default function App() {
                 key="academy"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="max-w-6xl mx-auto space-y-12 pb-20"
+                className="max-w-6xl mx-auto space-y-8 lg:space-y-12 pb-20"
               >
-                <div className="flex justify-between items-center">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
                   <div>
-                    <h2 className="text-4xl font-bold mb-2">Investor Academy</h2>
-                    <p className="text-gray-500 text-lg">Master the art of investing in the Nigerian stock market (NGX).</p>
+                    <h2 className="text-2xl md:text-4xl font-bold mb-2">Investor Academy</h2>
+                    <p className="text-gray-500 text-sm md:text-lg">Master the art of investing in the Nigerian stock market (NGX).</p>
                   </div>
                 </div>
 
