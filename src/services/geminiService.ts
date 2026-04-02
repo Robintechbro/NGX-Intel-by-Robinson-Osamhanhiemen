@@ -1,0 +1,142 @@
+import { GoogleGenAI } from "@google/genai";
+import { StockData, SearchResult, MarketTrends } from "../types";
+
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+
+export async function getMarketTrends(): Promise<MarketTrends> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Current Date: ${new Date().toISOString()}.
+          Fetch the LATEST real-time Top 5 Gainers and Top 5 Losers for the Nigerian Stock Market (NGX).
+          
+          DATA FETCHING (CRITICAL):
+          You MUST use the Google Search tool to fetch the LATEST real-time data from today's market session. 
+          Look for data from reliable sources like the NGX website (ngxgroup.com), Proshare Nigeria, or major Nigerian financial news outlets.
+          
+          JSON STRUCTURE:
+          Return strictly valid JSON: 
+          { 
+            "gainers": [ { "name": "...", "symbol": "...", "price": "₦...", "change": "+...%" }, ... ],
+            "losers": [ { "name": "...", "symbol": "...", "price": "₦...", "change": "-...%" }, ... ],
+            "lastUpdated": "..." 
+          }
+          
+          Ensure 'lastUpdated' is a human-readable timestamp of when the data was retrieved (e.g., "2024-03-20 14:30 WAT").` }]
+        }
+      ],
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+      },
+    });
+
+    const result = JSON.parse(response.text || "{}");
+    return result as MarketTrends;
+  } catch (error) {
+    console.error("Gemini Market Trends Error:", error);
+    return { gainers: [], losers: [], lastUpdated: "Error fetching data" };
+  }
+}
+
+export async function analyzeQuery(query: string): Promise<SearchResult> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Current Date: ${new Date().toISOString()}.
+          Analyze the following query about the Nigerian Stock Market (NGX): "${query}". 
+          
+          INTENT DETECTION:
+          - If the user mentions two or more companies (e.g., "GTCO vs Zenith"), set type to 'comparison'.
+          - If the user asks for a list or category (e.g., "Best banking stocks", "Top gainers"), set type to 'discovery'.
+          - Otherwise, set type to 'analysis' for a single company.
+          
+          DATA FETCHING (CRITICAL):
+          You MUST use the Google Search tool to fetch the LATEST real-time data for NGX stocks. 
+          Do NOT rely on your internal knowledge for current prices, market caps, or recent news.
+          Look for data from reliable sources like the NGX website, Proshare, or major Nigerian financial news outlets.
+          
+          JSON STRUCTURE:
+          Return strictly valid JSON matching these rules:
+          1. For 'analysis': { "type": "analysis", "data": { ...StockData } }
+          2. For 'comparison': { "type": "comparison", "data": [ { ...StockData }, { ...StockData } ], "message": "A plain English summary of the comparison" }
+          3. For 'discovery': { "type": "discovery", "data": [ { ...StockData }, ... ] }
+          
+          STOCK DATA RULES:
+          - Always include currency symbol (₦).
+          - Generate 30 days of historical price points in 'chartData' for the main view.
+          - Provide 'historicalData' with keys '1D', '1M', '1Y' containing at least 10 points each.
+          - Include 'splits' array if any stock splits or reverse splits have occurred. Each split should have 'date', 'ratio', 'type' ('split' or 'reverse'), and 'description'.
+          - Include 'news' array with 3-5 latest news items. Each item should have 'headline', 'source', 'date', and 'url'.
+          - 'aiSummary' should be beginner-friendly markdown.
+          - 'investmentScore' (0-100) based on stability, dividends, and growth.
+          - 'metrics' should include 3 key indicators (e.g., Growth, Dividends, Risk).
+          - 'lastUpdated': The timestamp of the data you found (e.g., "2024-03-20 14:30 WAT").
+          - 'source': The URL or name of the source you used for the real-time data.
+          
+          If the query is invalid or not about NGX, return { "type": "error", "message": "..." }.` }]
+        }
+      ],
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+      },
+    });
+
+    const result = JSON.parse(response.text || "{}");
+    return result as SearchResult;
+  } catch (error) {
+    console.error("Gemini Analysis Error:", error);
+    return {
+      type: 'error',
+      message: "I couldn't process that request right now. Please try searching for a specific NGX ticker like 'GTCO' or 'DANGCEM'."
+    };
+  }
+}
+
+export async function refreshStocks(symbols: string[]): Promise<StockData[]> {
+  if (symbols.length === 0) return [];
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Current Date: ${new Date().toISOString()}.
+          Refresh the LATEST real-time data for these NGX stock symbols: ${symbols.join(', ')}.
+          
+          DATA FETCHING (CRITICAL):
+          You MUST use the Google Search tool to fetch the LATEST real-time data for these stocks. 
+          Look for data from reliable sources like the NGX website, Proshare, or major Nigerian financial news outlets.
+          
+          JSON STRUCTURE:
+          Return strictly valid JSON: { "data": [ { ...StockData }, ... ] }
+          
+          STOCK DATA RULES:
+          - Always include currency symbol (₦).
+          - Include current price, change, changePercent, and lastUpdated.
+          - Also include updated chartData (30 days) and historicalData (1D, 1M, 1Y).
+          - 'lastUpdated': The timestamp of the data you found (e.g., "2024-03-20 14:30 WAT").
+          - 'source': The URL or name of the source you used for the real-time data.` }]
+        }
+      ],
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+      },
+    });
+
+    const result = JSON.parse(response.text || "{}");
+    return result.data || [];
+  } catch (error) {
+    console.error("Gemini Refresh Error:", error);
+    return [];
+  }
+}
