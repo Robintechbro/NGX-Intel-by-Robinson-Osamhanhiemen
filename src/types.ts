@@ -63,3 +63,12 @@ export interface MarketTrends {
   losers: { name: string; symbol: string; price: string; change: string }[];
   lastUpdated?: string;
 }
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  isPremium: boolean;
+  searchCount: number;
+  trendsClickCount: number;
+}
