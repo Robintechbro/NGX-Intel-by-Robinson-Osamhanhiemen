@@ -1014,7 +1014,7 @@ const AuthModal = ({ isOpen, onClose }: { isOpen: boolean, onClose: () => void }
   );
 };
 
-const LandingPage = ({ onSignIn }: { onSignIn: () => void }) => {
+const LandingPage = ({ onSignIn, onGuestContinue }: { onSignIn: () => void, onGuestContinue: () => void }) => {
   return (
     <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 relative overflow-hidden">
       {/* Background Glows */}
@@ -1046,14 +1046,14 @@ const LandingPage = ({ onSignIn }: { onSignIn: () => void }) => {
             onClick={onSignIn}
             className="w-full sm:w-auto px-10 py-5 bg-foreground text-background font-bold rounded-2xl hover:opacity-90 transition-all flex items-center justify-center gap-3 text-lg group"
           >
-            Get Started Now
+            Sign In with Google
             <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
           </button>
           <button 
-            onClick={() => window.open('https://ngxgroup.com/', '_blank')}
+            onClick={onGuestContinue}
             className="w-full sm:w-auto px-10 py-5 bg-foreground/5 border border-border text-foreground font-bold rounded-2xl hover:bg-foreground/10 transition-all text-lg"
           >
-            Explore Market
+            Continue as Guest
           </button>
         </div>
 
@@ -1303,6 +1303,202 @@ const TagManager = ({ stock, onAdd, onRemove }: { stock: StockData, onAdd: (tag:
   );
 };
 
+const MarketStatusView = () => {
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [trends, setTrends] = useState<MarketTrends | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    const fetchTrends = async () => {
+      setLoading(true);
+      const data = await getMarketTrends();
+      setTrends(data);
+      setLoading(false);
+    };
+    fetchTrends();
+  }, []);
+
+  // NGX Market Hours: 10:00 AM - 2:30 PM WAT (UTC+1)
+  // Nigeria is UTC+1
+  const getWATTime = (date: Date) => {
+    const utc = date.getTime() + (date.getTimezoneOffset() * 60000);
+    return new Date(utc + (3600000 * 1));
+  };
+
+  const watDate = getWATTime(currentTime);
+  const day = watDate.getDay(); // 0 = Sunday, 6 = Saturday
+  const hours = watDate.getHours();
+  const minutes = watDate.getMinutes();
+  const timeInMinutes = hours * 60 + minutes;
+
+  const isOpenDay = day >= 1 && day <= 5;
+  const isOpenTime = timeInMinutes >= (10 * 60) && timeInMinutes < (14 * 60 + 30);
+  const isMarketOpen = isOpenDay && isOpenTime;
+
+  const getStatusMessage = () => {
+    if (!isOpenDay) return "The market is closed for the weekend. Trading resumes on Monday at 10:00 AM WAT.";
+    if (timeInMinutes < (10 * 60)) return "The market is currently closed. Pre-market session starts soon. Trading opens at 10:00 AM WAT.";
+    if (isMarketOpen) return "The market is currently OPEN. Trading is active across all sectors.";
+    return "The market is closed for the day. Trading ended at 2:30 PM WAT.";
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-12">
+      <div className="text-center space-y-4">
+        <div className="inline-flex items-center gap-2 px-4 py-2 bg-foreground/5 border border-border rounded-full">
+          <div className={cn("w-2 h-2 rounded-full animate-pulse", isMarketOpen ? "bg-green-500" : "bg-red-500")} />
+          <span className="text-[10px] font-bold uppercase tracking-[0.2em] text-gray-500">
+            Live Market Status
+          </span>
+        </div>
+        <h2 className="text-4xl md:text-6xl font-bold tracking-tight">
+          NGX Market is <br />
+          <span className={isMarketOpen ? "text-green-500" : "text-red-500"}>
+            {isMarketOpen ? "OPEN" : "CLOSED"}
+          </span>
+        </h2>
+        <p className="text-gray-500 text-lg max-w-xl mx-auto">
+          {getStatusMessage()}
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-1 bg-card border border-border p-8 rounded-[2rem] space-y-6 h-fit">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Market Hours (WAT)</h3>
+          <div className="space-y-4">
+            <div className="flex justify-between items-center pb-4 border-b border-border">
+              <span className="text-gray-500">Monday - Friday</span>
+              <span className="font-bold">10:00 AM - 2:30 PM</span>
+            </div>
+            <div className="flex justify-between items-center pb-4 border-b border-border">
+              <span className="text-gray-500">Saturday - Sunday</span>
+              <span className="font-bold text-red-500">Closed</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-gray-500">Current Time (Lagos)</span>
+              <span className="font-bold">{watDate.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
+            </div>
+          </div>
+          
+          <div className="pt-6 border-t border-border">
+            <h4 className="text-xs font-bold text-gray-500 uppercase tracking-widest mb-4">What's Happening Now?</h4>
+            <div className="space-y-4">
+              {isMarketOpen ? (
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 bg-green-500/10 rounded-full flex items-center justify-center shrink-0">
+                    <TrendingUp size={14} className="text-green-500" />
+                  </div>
+                  <p className="text-sm text-gray-500">Active trading session. Real-time price updates are being processed across all sectors.</p>
+                </div>
+              ) : (
+                <div className="flex gap-3">
+                  <div className="w-8 h-8 bg-red-500/10 rounded-full flex items-center justify-center shrink-0">
+                    <TrendingDown size={14} className="text-red-500" />
+                  </div>
+                  <p className="text-sm text-gray-500">Market is currently offline. Orders placed now will be queued for the next trading session.</p>
+                </div>
+              )}
+              <div className="flex gap-3">
+                <div className="w-8 h-8 bg-blue-500/10 rounded-full flex items-center justify-center shrink-0">
+                  <PieChart size={14} className="text-blue-500" />
+                </div>
+                <p className="text-sm text-gray-500">AI analysis is processing historical data to identify potential opportunities for tomorrow.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="lg:col-span-2 space-y-6">
+          <div className="bg-card border border-border p-8 rounded-[2rem]">
+            <div className="flex justify-between items-center mb-8">
+              <h3 className="text-xl font-bold">Market Trends</h3>
+              {trends?.lastUpdated && (
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                  Last Updated: {trends.lastUpdated}
+                </span>
+              )}
+            </div>
+
+            {loading ? (
+              <div className="flex flex-col items-center justify-center py-20 space-y-4">
+                <Loader2 size={40} className="text-green-500 animate-spin" />
+                <p className="text-gray-500 font-medium">Fetching latest NGX market activity...</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                {/* Top Gainers */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-green-500">
+                    <TrendingUp size={18} />
+                    <h4 className="font-bold">Top Gainers</h4>
+                  </div>
+                  <div className="space-y-3">
+                    {trends?.gainers.map((stock, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-foreground/5 rounded-xl border border-border/50">
+                        <div>
+                          <p className="font-bold text-sm">{stock.symbol}</p>
+                          <p className="text-[10px] text-gray-500">{stock.name}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-sm">{stock.price}</p>
+                          <p className="text-[10px] font-bold text-green-500">{stock.change}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {(!trends?.gainers || trends.gainers.length === 0) && (
+                      <p className="text-sm text-gray-500 italic">No gainer data available.</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Top Losers */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-2 text-red-500">
+                    <TrendingDown size={18} />
+                    <h4 className="font-bold">Top Losers</h4>
+                  </div>
+                  <div className="space-y-3">
+                    {trends?.losers.map((stock, i) => (
+                      <div key={i} className="flex items-center justify-between p-3 bg-foreground/5 rounded-xl border border-border/50">
+                        <div>
+                          <p className="font-bold text-sm">{stock.symbol}</p>
+                          <p className="text-[10px] text-gray-500">{stock.name}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-sm">{stock.price}</p>
+                          <p className="text-[10px] font-bold text-red-500">{stock.change}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {(!trends?.losers || trends.losers.length === 0) && (
+                      <p className="text-sm text-gray-500 italic">No loser data available.</p>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          <div className="bg-green-500/5 border border-green-500/10 p-6 rounded-2xl flex items-center gap-4">
+            <div className="w-12 h-12 bg-green-500/20 rounded-full flex items-center justify-center shrink-0">
+              <Zap size={24} className="text-green-500" />
+            </div>
+            <div>
+              <h4 className="font-bold text-green-500">Pro Tip</h4>
+              <p className="text-sm text-gray-500">The NGX usually experiences high volatility during the first 30 minutes (10:00 - 10:30 AM) and the last 30 minutes (2:00 - 2:30 PM) of the session.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // --- Main App ---
 
 interface UserProfile {
@@ -1316,6 +1512,7 @@ interface UserProfile {
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
+  const [isGuest, setIsGuest] = useState(false);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -1752,7 +1949,7 @@ export default function App() {
     );
   }
 
-  if (!user) {
+  if (!user && !isGuest) {
     return (
       <div className="min-h-screen bg-background text-foreground font-sans selection:bg-green-500/30">
         <Toaster position="top-right" theme={theme} />
@@ -1760,7 +1957,10 @@ export default function App() {
           isOpen={isAuthModalOpen} 
           onClose={() => setIsAuthModalOpen(false)} 
         />
-        <LandingPage onSignIn={() => setIsAuthModalOpen(true)} />
+        <LandingPage 
+          onSignIn={() => setIsAuthModalOpen(true)} 
+          onGuestContinue={() => setIsGuest(true)}
+        />
       </div>
     );
   }
@@ -1842,6 +2042,12 @@ export default function App() {
                   onClick={() => { setActiveTab('dashboard'); setIsMobileMenuOpen(false); }} 
                 />
                 <SidebarItem 
+                  icon={Activity} 
+                  label="Market Status" 
+                  active={activeTab === 'market-status'} 
+                  onClick={() => { setActiveTab('market-status'); setIsMobileMenuOpen(false); }} 
+                />
+                <SidebarItem 
                   icon={Compass} 
                   label="Explorer" 
                   active={activeTab === 'explorer' || activeTab === 'discovery'} 
@@ -1903,10 +2109,10 @@ export default function App() {
                   </div>
                 ) : (
                   <button 
-                    onClick={() => { handleLogin(); setIsMobileMenuOpen(false); }}
-                    className="w-full py-4 bg-foreground text-background font-bold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2"
+                    onClick={() => { setIsAuthModalOpen(true); setIsMobileMenuOpen(false); }}
+                    className="w-full py-4 bg-green-500 text-white font-bold rounded-xl hover:bg-green-600 transition-all flex items-center justify-center gap-2"
                   >
-                    <UserIcon size={20} /> Sign In
+                    <Globe size={18} /> Sign In with Google
                   </button>
                 )}
               </div>
@@ -1930,6 +2136,12 @@ export default function App() {
             label="Dashboard" 
             active={activeTab === 'dashboard'} 
             onClick={() => setActiveTab('dashboard')} 
+          />
+          <SidebarItem 
+            icon={Activity} 
+            label="Market Status" 
+            active={activeTab === 'market-status'} 
+            onClick={() => setActiveTab('market-status')} 
           />
           <SidebarItem 
             icon={Compass} 
@@ -2006,10 +2218,10 @@ export default function App() {
             </div>
           ) : (
             <button 
-              onClick={handleLogin}
-              className="w-full py-4 bg-foreground text-background font-bold rounded-xl hover:opacity-90 transition-all flex items-center justify-center gap-2"
+              onClick={() => setIsAuthModalOpen(true)}
+              className="w-full py-4 bg-green-500 text-white font-bold rounded-xl hover:bg-green-600 transition-all flex items-center justify-center gap-2"
             >
-              <UserIcon size={20} /> Sign In
+              <Globe size={18} /> Sign In with Google
             </button>
           )}
         </div>
@@ -2316,6 +2528,17 @@ export default function App() {
               </motion.div>
             )}
 
+            {activeTab === 'market-status' && (
+              <motion.div 
+                key="market-status"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-w-6xl mx-auto pb-20"
+              >
+                <MarketStatusView />
+              </motion.div>
+            )}
+
             {activeTab === 'watchlist' && (
               <motion.div 
                 key="watchlist"
@@ -2323,151 +2546,174 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 className="max-w-6xl mx-auto space-y-8 pb-20"
               >
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
-                  <div>
-                    <h2 className="text-2xl md:text-3xl font-bold">My Watchlist</h2>
-                    <p className="text-gray-500 text-sm">Track your favorite companies and their performance.</p>
-                  </div>
-                  <div className="text-left sm:text-right">
-                    <div className="text-2xl font-bold">{watchlist.length}</div>
-                    <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Companies</div>
-                  </div>
-                </div>
-
-                {watchlist.length > 0 && allWatchlistTags.length > 0 && (
-                  <div className="flex flex-wrap gap-2 items-center">
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mr-2">Filter by Tag:</span>
-                    <button 
-                      onClick={() => setSelectedWatchlistTag(null)}
-                      className={cn(
-                        "px-3 py-1 text-[10px] font-bold rounded-full border transition-all",
-                        selectedWatchlistTag === null 
-                          ? "bg-foreground text-background border-foreground" 
-                          : "bg-foreground/5 text-gray-500 border-border hover:border-foreground/20"
-                      )}
-                    >
-                      ALL
-                    </button>
-                    {allWatchlistTags.map(tag => (
-                      <button 
-                        key={tag}
-                        onClick={() => setSelectedWatchlistTag(selectedWatchlistTag === tag ? null : tag)}
-                        className={cn(
-                          "px-3 py-1 text-[10px] font-bold rounded-full border transition-all",
-                          selectedWatchlistTag === tag 
-                            ? "bg-blue-500 text-white border-blue-500" 
-                            : "bg-blue-500/5 text-blue-500 border-blue-500/20 hover:border-blue-500/40"
-                        )}
-                      >
-                        {tag.toUpperCase()}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {watchlist.length === 0 ? (
-                  <div className="bg-card border border-border p-20 rounded-3xl text-center">
-                    <div className="w-16 h-16 bg-foreground/5 rounded-full flex items-center justify-center mx-auto mb-6">
-                      <Bookmark size={32} className="text-gray-500" />
+                {!user ? (
+                  <div className="bg-card border border-border p-12 rounded-[2rem] text-center space-y-6 mt-10">
+                    <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
+                      <Lock size={40} className="text-green-500" />
                     </div>
-                    <h3 className="text-xl font-bold mb-2">Your Watchlist is Empty</h3>
-                    <p className="text-gray-500 max-w-md mx-auto mb-8">Start searching for companies and click the bookmark icon to add them to your watchlist for easy tracking.</p>
+                    <div className="space-y-2">
+                      <h2 className="text-3xl font-bold">Watchlist is a Premium Feature</h2>
+                      <p className="text-gray-500 max-w-md mx-auto">
+                        Sign in with your Google account to start tracking your favorite NGX stocks and receive personalized insights.
+                      </p>
+                    </div>
                     <button 
-                      onClick={() => setActiveTab('dashboard')}
-                      className="px-8 py-3 bg-green-500 text-white font-bold rounded-full hover:bg-green-600 transition-all"
+                      onClick={() => setIsAuthModalOpen(true)}
+                      className="px-8 py-4 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-all flex items-center gap-2 mx-auto"
                     >
-                      Explore Market
+                      <Globe size={20} />
+                      Sign In to Unlock
                     </button>
                   </div>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {watchlist
-                      .filter(stock => !selectedWatchlistTag || (stock.tags || []).includes(selectedWatchlistTag))
-                      .map((stock) => (
-                      <div key={stock.symbol} className="bg-[#111] border border-white/5 p-6 rounded-2xl relative group">
-                        <button 
-                          onClick={() => removeFromWatchlist(stock.symbol)}
-                          className="absolute top-4 right-4 p-2 bg-white/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-400/10 hover:text-red-400"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                        <div className="flex flex-col h-full">
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <h3 className="font-bold text-lg group-hover:text-green-400 transition-colors">{stock.name}</h3>
-                              <p className="text-xs text-gray-500">{stock.symbol} • {stock.sector}</p>
-                            </div>
-                            <div className="text-right">
-                              <LivePrice value={stock.price} change={stock.change} changePercent={stock.changePercent} size="small" />
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 mb-4">
-                            <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
-                              <div className="h-full bg-green-400" style={{ width: `${stock.investmentScore}%` }} />
-                            </div>
-                            <span className="text-[10px] font-bold text-gray-400">{stock.investmentScore}</span>
-                          </div>
-                          <p className="text-xs text-gray-500 line-clamp-2 mb-4 flex-1">{stock.aiSummary}</p>
-                          
-                          <TagManager 
-                            stock={stock} 
-                            onAdd={(tag) => addTagToStock(stock.symbol, tag)} 
-                            onRemove={(tag) => removeTagFromStock(stock.symbol, tag)} 
-                          />
+                  <>
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
+                      <div>
+                        <h2 className="text-2xl md:text-3xl font-bold">My Watchlist</h2>
+                        <p className="text-gray-500 text-sm">Track your favorite companies and their performance.</p>
+                      </div>
+                      <div className="text-left sm:text-right">
+                        <div className="text-2xl font-bold">{watchlist.length}</div>
+                        <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Companies</div>
+                      </div>
+                    </div>
 
-                          <div className="flex items-center gap-2 pt-4 border-t border-white/5 mt-4">
+                    {watchlist.length > 0 && allWatchlistTags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 items-center">
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mr-2">Filter by Tag:</span>
+                        <button 
+                          onClick={() => setSelectedWatchlistTag(null)}
+                          className={cn(
+                            "px-3 py-1 text-[10px] font-bold rounded-full border transition-all",
+                            selectedWatchlistTag === null 
+                              ? "bg-foreground text-background border-foreground" 
+                              : "bg-foreground/5 text-gray-500 border-border hover:border-foreground/20"
+                          )}
+                        >
+                          ALL
+                        </button>
+                        {allWatchlistTags.map(tag => (
+                          <button 
+                            key={tag}
+                            onClick={() => setSelectedWatchlistTag(selectedWatchlistTag === tag ? null : tag)}
+                            className={cn(
+                              "px-3 py-1 text-[10px] font-bold rounded-full border transition-all",
+                              selectedWatchlistTag === tag 
+                                ? "bg-blue-500 text-white border-blue-500" 
+                                : "bg-blue-500/5 text-blue-500 border-blue-500/20 hover:border-blue-500/40"
+                            )}
+                          >
+                            {tag.toUpperCase()}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {watchlist.length === 0 ? (
+                      <div className="bg-card border border-border p-20 rounded-3xl text-center">
+                        <div className="w-16 h-16 bg-foreground/5 rounded-full flex items-center justify-center mx-auto mb-6">
+                          <Bookmark size={32} className="text-gray-500" />
+                        </div>
+                        <h3 className="text-xl font-bold mb-2">Your Watchlist is Empty</h3>
+                        <p className="text-gray-500 max-w-md mx-auto mb-8">Start searching for companies and click the bookmark icon to add them to your watchlist for easy tracking.</p>
+                        <button 
+                          onClick={() => setActiveTab('dashboard')}
+                          className="px-8 py-3 bg-green-500 text-white font-bold rounded-full hover:bg-green-600 transition-all"
+                        >
+                          Explore Market
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                        {watchlist
+                          .filter(stock => !selectedWatchlistTag || (stock.tags || []).includes(selectedWatchlistTag))
+                          .map((stock) => (
+                          <div key={stock.symbol} className="bg-[#111] border border-white/5 p-6 rounded-2xl relative group flex flex-col h-full">
                             <button 
-                              onClick={() => handleViewDetails(stock)}
-                              className="flex-1 px-4 py-2 bg-white/5 rounded-xl hover:bg-white/10 transition-all border border-white/10 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-white flex items-center justify-center gap-2"
+                              onClick={() => removeFromWatchlist(stock.symbol)}
+                              className="absolute top-4 right-4 p-2 bg-white/5 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-400/10 hover:text-red-400"
                             >
-                              More Info <ArrowRight size={12} />
+                              <Trash2 size={16} />
                             </button>
-                            <button 
-                              onClick={() => {
-                                setSelectedStockForAlert(stock);
-                                setIsAlertModalOpen(true);
-                              }}
-                              className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-all border border-white/10 text-gray-400 hover:text-yellow-400"
-                              title="Set Price Alert"
-                            >
-                              <Bell size={16} />
-                            </button>
+                            <div className="flex flex-col h-full">
+                              <div className="flex justify-between items-start mb-4">
+                                <div>
+                                  <h3 className="font-bold text-lg group-hover:text-green-400 transition-colors">{stock.name}</h3>
+                                  <p className="text-xs text-gray-500">{stock.symbol} • {stock.sector}</p>
+                                </div>
+                                <div className="text-right">
+                                  <LivePrice value={stock.price} change={stock.change} changePercent={stock.changePercent} size="small" />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 mb-4">
+                                <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
+                                  <div className="h-full bg-green-400" style={{ width: `${stock.investmentScore}%` }} />
+                                </div>
+                                <span className="text-[10px] font-bold text-gray-400">{stock.investmentScore}</span>
+                              </div>
+                              <p className="text-xs text-gray-500 line-clamp-2 mb-4 flex-1">{stock.aiSummary}</p>
+                              
+                              <TagManager 
+                                stock={stock} 
+                                onAdd={(tag) => addTagToStock(stock.symbol, tag)} 
+                                onRemove={(tag) => removeTagFromStock(stock.symbol, tag)} 
+                              />
+
+                              <div className="flex items-center gap-2 pt-4 border-t border-white/5 mt-4">
+                                <button 
+                                  onClick={() => handleViewDetails(stock)}
+                                  className="flex-1 px-4 py-2 bg-white/5 rounded-xl hover:bg-white/10 transition-all border border-white/10 text-[10px] font-bold uppercase tracking-widest text-gray-400 hover:text-white flex items-center justify-center gap-2"
+                                >
+                                  More Info <ArrowRight size={12} />
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    setSelectedStockForAlert(stock);
+                                    setIsAlertModalOpen(true);
+                                  }}
+                                  className="p-2 bg-white/5 rounded-xl hover:bg-white/10 transition-all border border-white/10 text-gray-400 hover:text-yellow-400"
+                                  title="Set Price Alert"
+                                >
+                                  <Bell size={16} />
+                                </button>
+                              </div>
+                            </div>
                           </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Active Alerts Section */}
+                    {alerts.length > 0 && (
+                      <div className="mt-12 space-y-6">
+                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Active Price Alerts</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                          {alerts.map(alert => (
+                            <div key={alert.id} className={cn(
+                              "p-4 rounded-2xl border flex items-center justify-between transition-all",
+                              alert.active ? "bg-yellow-400/5 border-yellow-400/20" : "bg-white/5 border-white/10 opacity-50"
+                            )}>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-bold">{alert.symbol}</span>
+                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/10 rounded uppercase">
+                                    {alert.type}
+                                  </span>
+                                </div>
+                                <div className="text-lg font-bold">₦{alert.targetPrice}</div>
+                              </div>
+                              <button 
+                                onClick={() => removeAlert(alert.id)}
+                                className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-red-400 transition-colors"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Active Alerts Section */}
-                {alerts.length > 0 && (
-                  <div className="mt-12 space-y-6">
-                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Active Price Alerts</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {alerts.map(alert => (
-                        <div key={alert.id} className={cn(
-                          "p-4 rounded-2xl border flex items-center justify-between transition-all",
-                          alert.active ? "bg-yellow-400/5 border-yellow-400/20" : "bg-white/5 border-white/10 opacity-50"
-                        )}>
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="font-bold">{alert.symbol}</span>
-                              <span className="text-[10px] px-1.5 py-0.5 bg-white/10 rounded uppercase">
-                                {alert.type}
-                              </span>
-                            </div>
-                            <div className="text-lg font-bold">₦{alert.targetPrice}</div>
-                          </div>
-                          <button 
-                            onClick={() => removeAlert(alert.id)}
-                            className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
+                    )}
+                  </>
                 )}
               </motion.div>
             )}
