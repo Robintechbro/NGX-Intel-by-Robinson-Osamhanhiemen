@@ -58,6 +58,23 @@ export interface SearchResult {
   message?: string;
 }
 
+export interface SectorPerformance {
+  name: string;
+  change: string;
+  changePercent: string;
+  trend: 'up' | 'down' | 'neutral';
+  topStocks: { symbol: string; change: string }[];
+  description: string;
+}
+
+export interface MarketOverview {
+  overallIndex: string;
+  indexChange: string;
+  indexChangePercent: string;
+  sectors: SectorPerformance[];
+  lastUpdated: string;
+}
+
 export interface MarketTrends {
   gainers: { name: string; symbol: string; price: string; change: string }[];
   losers: { name: string; symbol: string; price: string; change: string }[];

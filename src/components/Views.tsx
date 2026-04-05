@@ -25,9 +25,158 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import ReactMarkdown from 'react-markdown';
-import { StockData, MarketTrends } from '../types';
-import { getMarketTrends } from '../services/geminiService';
+import { StockData, MarketTrends, MarketOverview } from '../types';
+import { getMarketTrends, getMarketOverview } from '../services/geminiService';
 import { MetricCard, CompactMetric, LivePrice, SpeakButton } from './Common';
+
+export const MarketOverviewView = ({ onSectorClick, onStockClick }: { onSectorClick: (sector: string) => void, onStockClick: (symbol: string) => void }) => {
+  const [overview, setOverview] = useState<MarketOverview | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchOverview = async () => {
+      setLoading(true);
+      const data = await getMarketOverview();
+      setOverview(data);
+      setLoading(false);
+    };
+    fetchOverview();
+  }, []);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-32 space-y-4">
+        <Loader2 size={48} className="text-green-500 animate-spin" />
+        <p className="text-gray-500 font-medium text-lg">Assembling the Big Dashboard...</p>
+      </div>
+    );
+  }
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-7xl mx-auto space-y-12"
+    >
+      {/* Market Header */}
+      <div className="bg-card border border-border p-10 rounded-[3rem] relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/5 blur-[100px] -mr-32 -mt-32" />
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-end gap-8">
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Activity size={20} className="text-green-500" />
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-[0.3em]">NGX All-Share Index (ASI)</span>
+            </div>
+            <h2 className="text-5xl md:text-7xl font-bold tracking-tighter mb-4">{overview?.overallIndex}</h2>
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                "flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-bold",
+                overview?.indexChange.startsWith('+') ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
+              )}>
+                {overview?.indexChange.startsWith('+') ? <ArrowUpRight size={16} /> : <ArrowDownRight size={16} />}
+                {overview?.indexChange} ({overview?.indexChangePercent})
+              </div>
+              <span className="text-xs text-gray-500 font-medium">Last Updated: {overview?.lastUpdated}</span>
+            </div>
+          </div>
+          <div className="hidden lg:block w-64 h-24 bg-foreground/5 rounded-2xl border border-border p-4">
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Market Sentiment</span>
+              <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Bullish</span>
+            </div>
+            <div className="w-full h-2 bg-foreground/10 rounded-full overflow-hidden">
+              <motion.div 
+                initial={{ width: 0 }}
+                animate={{ width: '75%' }}
+                className="h-full bg-green-500"
+              />
+            </div>
+            <p className="text-[10px] text-gray-500 mt-2">75% of sectors are showing positive momentum today.</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Sector Grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+        {overview?.sectors.map((sector, i) => (
+          <motion.div 
+            key={i}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ delay: i * 0.1 }}
+            className="bg-card border border-border p-8 rounded-[2.5rem] hover:border-green-500/30 transition-all group"
+          >
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-2xl font-bold mb-1 group-hover:text-green-500 transition-colors">{sector.name}</h3>
+                <p className="text-xs text-gray-500 line-clamp-1">{sector.description}</p>
+              </div>
+              <div className={cn(
+                "px-3 py-1 rounded-full text-xs font-bold",
+                sector.trend === 'up' ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
+              )}>
+                {sector.changePercent}
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Top Performers</span>
+              {sector.topStocks.map((stock, j) => (
+                <div 
+                  key={j} 
+                  onClick={() => onStockClick(stock.symbol)}
+                  className="flex items-center justify-between p-4 bg-foreground/5 rounded-2xl border border-border/50 group-hover:bg-foreground/[0.08] transition-all cursor-pointer hover:border-green-500/50"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-foreground/10 rounded-lg flex items-center justify-center text-[10px] font-bold">
+                      {stock.symbol.charAt(0)}
+                    </div>
+                    <span className="font-bold text-sm">{stock.symbol}</span>
+                  </div>
+                  <span className={cn(
+                    "text-xs font-bold",
+                    stock.change.startsWith('+') ? "text-green-500" : "text-red-500"
+                  )}>
+                    {stock.change}
+                  </span>
+                </div>
+              ))}
+            </div>
+            
+            <button 
+              onClick={() => onSectorClick(sector.name)}
+              className="w-full mt-6 py-3 bg-foreground/5 rounded-xl text-[10px] font-bold uppercase tracking-widest text-gray-500 group-hover:bg-green-500 group-hover:text-white transition-all"
+            >
+              View Sector Analysis
+            </button>
+          </motion.div>
+        ))}
+      </div>
+
+      {/* Market Insights */}
+      <div className="bg-gradient-to-br from-blue-500/5 to-purple-500/5 border border-border p-10 rounded-[3rem]">
+        <div className="flex items-center gap-3 mb-8">
+          <Zap size={24} className="text-yellow-500" />
+          <h3 className="text-2xl font-bold">Institutional Insights</h3>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+          <div className="space-y-4">
+            <h4 className="text-sm font-bold uppercase tracking-widest text-gray-500">Wealth Manager's Perspective</h4>
+            <p className="text-gray-400 leading-relaxed">
+              "The current market rotation into the Banking sector is driven by anticipated dividend yields and strong Q4 earnings reports. High-net-worth individuals are increasing their exposure to Tier-1 banks while hedging with defensive stocks in the Consumer Goods sector."
+            </p>
+          </div>
+          <div className="space-y-4">
+            <h4 className="text-sm font-bold uppercase tracking-widest text-gray-500">Telecom Outlook</h4>
+            <p className="text-gray-400 leading-relaxed">
+              "Telecommunications remain a core growth pillar. With increasing data penetration and mobile money expansion, stocks like MTNN and AIRTELAFRI are being viewed as long-term infrastructure plays rather than simple utility stocks."
+            </p>
+          </div>
+        </div>
+      </div>
+    </motion.div>
+  );
+};
 
 export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData }: { data: any[], timeframe: string, setTimeframe: (tf: string) => void, historicalData?: { [key: string]: any[] } }) => {
   const [chartData, setChartData] = useState(data);

@@ -85,6 +85,7 @@ import { TagManager } from './components/TagManager';
 const StockAnalysisView = lazy(() => import('./components/Views').then(m => ({ default: m.StockAnalysisView })));
 const ProfileView = lazy(() => import('./components/Views').then(m => ({ default: m.ProfileView })));
 const MarketStatusView = lazy(() => import('./components/Views').then(m => ({ default: m.MarketStatusView })));
+const MarketOverviewView = lazy(() => import('./components/Views').then(m => ({ default: m.MarketOverviewView })));
 
 // --- Helpers ---
 
@@ -618,6 +619,12 @@ export default function App() {
                   onClick={() => { setActiveTab('market-status'); setIsMobileMenuOpen(false); }} 
                 />
                 <SidebarItem 
+                  icon={LayoutDashboard} 
+                  label="Big Dashboard" 
+                  active={activeTab === 'overview'} 
+                  onClick={() => { setActiveTab('overview'); setIsMobileMenuOpen(false); }} 
+                />
+                <SidebarItem 
                   icon={Compass} 
                   label="Explorer" 
                   active={activeTab === 'explorer' || activeTab === 'discovery'} 
@@ -712,6 +719,12 @@ export default function App() {
             label="Market Status" 
             active={activeTab === 'market-status'} 
             onClick={() => setActiveTab('market-status')} 
+          />
+          <SidebarItem 
+            icon={LayoutDashboard} 
+            label="Big Dashboard" 
+            active={activeTab === 'overview'} 
+            onClick={() => setActiveTab('overview')} 
           />
           <SidebarItem 
             icon={Compass} 
@@ -883,7 +896,8 @@ export default function App() {
 
         {/* Scrollable Area */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
-          <AnimatePresence mode="wait">
+          <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="animate-spin text-green-500" size={40} /></div>}>
+            <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && (
               <motion.div 
                 key="dashboard"
@@ -1106,6 +1120,20 @@ export default function App() {
                 className="max-w-6xl mx-auto pb-20"
               >
                 <MarketStatusView />
+              </motion.div>
+            )}
+
+            {activeTab === 'overview' && (
+              <motion.div 
+                key="overview"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-w-7xl mx-auto pb-20"
+              >
+                <MarketOverviewView 
+                  onSectorClick={(sector) => handleSearch(undefined, `Top stocks in ${sector} sector`)}
+                  onStockClick={(symbol) => handleSearch(undefined, symbol)}
+                />
               </motion.div>
             )}
 
@@ -1839,6 +1867,7 @@ The NGX is dominated by a few key sectors. A well-diversified portfolio should t
               />
             )}
           </AnimatePresence>
+          </Suspense>
         </div>
       </main>
     </div>

@@ -1,7 +1,66 @@
 import { GoogleGenAI, Modality } from "@google/genai";
-import { StockData, SearchResult, MarketTrends } from "../types";
+import { StockData, SearchResult, MarketTrends, MarketOverview } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
+
+export async function getMarketOverview(): Promise<MarketOverview> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Current Date: ${new Date().toISOString()}.
+          Fetch a COMPREHENSIVE overview of the Nigerian Stock Market (NGX).
+          
+          DATA FETCHING (CRITICAL):
+          You MUST use the Google Search tool to fetch the LATEST real-time data.
+          Look for:
+          1. The overall NGX All-Share Index (ASI) value and its daily change.
+          2. Performance of key sectors: Banking, Telecommunications, Consumer Goods, Industrial Goods, Oil & Gas.
+          3. For each sector, find the top 2-3 performing stocks today.
+          
+          JSON STRUCTURE:
+          Return strictly valid JSON:
+          {
+            "overallIndex": "...",
+            "indexChange": "...",
+            "indexChangePercent": "...",
+            "sectors": [
+              {
+                "name": "...",
+                "change": "...",
+                "changePercent": "...",
+                "trend": "up" | "down" | "neutral",
+                "topStocks": [ { "symbol": "...", "change": "..." } ],
+                "description": "A brief, 1-sentence summary of why this sector is moving."
+              }
+            ],
+            "lastUpdated": "..."
+          }
+          
+          Ensure 'lastUpdated' is a human-readable timestamp (e.g., "2024-03-20 14:30 WAT").` }]
+        }
+      ],
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+      },
+    });
+
+    const result = JSON.parse(response.text || "{}");
+    return result as MarketOverview;
+  } catch (error) {
+    console.error("Gemini Market Overview Error:", error);
+    return {
+      overallIndex: "N/A",
+      indexChange: "0.00",
+      indexChangePercent: "0.00%",
+      sectors: [],
+      lastUpdated: "Error fetching data"
+    };
+  }
+}
 
 export async function textToSpeech(text: string): Promise<string | null> {
   try {
