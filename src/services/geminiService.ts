@@ -33,11 +33,14 @@ export async function getMarketOverview(): Promise<MarketOverview> {
                 "changePercent": "...",
                 "trend": "up" | "down" | "neutral",
                 "topStocks": [ { "symbol": "...", "change": "..." } ],
-                "description": "A brief, 1-sentence summary of why this sector is moving."
+                "description": "A brief, 1-sentence summary of why this sector is moving.",
+                "trendData": [ { "date": "...", "value": number } ]
               }
             ],
             "lastUpdated": "..."
           }
+          
+          For 'trendData', provide 7-10 historical data points representing the sector's performance over the last week or month to visualize a sparkline.
           
           Ensure 'lastUpdated' is a human-readable timestamp (e.g., "2024-03-20 14:30 WAT").` }]
         }

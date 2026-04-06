@@ -65,6 +65,7 @@ export interface SectorPerformance {
   trend: 'up' | 'down' | 'neutral';
   topStocks: { symbol: string; change: string }[];
   description: string;
+  trendData?: { date: string; value: number }[];
 }
 
 export interface MarketOverview {

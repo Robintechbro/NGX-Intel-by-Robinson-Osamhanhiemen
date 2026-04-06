@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   TrendingUp, 
   TrendingDown,
@@ -11,7 +11,10 @@ import {
   Loader2,
   Bell,
   Shield,
-  ArrowRight
+  ArrowRight,
+  Settings,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -22,12 +25,43 @@ import {
   YAxis, 
   CartesianGrid, 
   Tooltip, 
-  ResponsiveContainer
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  Cell,
+  Brush,
+  LineChart,
+  Line,
+  ReferenceLine
 } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 import { StockData, MarketTrends, MarketOverview } from '../types';
 import { getMarketTrends, getMarketOverview } from '../services/geminiService';
 import { MetricCard, CompactMetric, LivePrice, SpeakButton } from './Common';
+
+const MiniSparkline = ({ data, color }: { data: { value: number }[], color: string }) => (
+  <div className="h-12 w-24">
+    <ResponsiveContainer width="100%" height="100%">
+      <AreaChart data={data}>
+        <defs>
+          <linearGradient id={`color-${color}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="5%" stopColor={color} stopOpacity={0.3}/>
+            <stop offset="95%" stopColor={color} stopOpacity={0}/>
+          </linearGradient>
+        </defs>
+        <Area 
+          type="monotone" 
+          dataKey="value" 
+          stroke={color} 
+          fillOpacity={1} 
+          fill={`url(#color-${color})`} 
+          strokeWidth={2}
+          isAnimationActive={false}
+        />
+      </AreaChart>
+    </ResponsiveContainer>
+  </div>
+);
 
 export const MarketOverviewView = ({ onSectorClick, onStockClick }: { onSectorClick: (sector: string) => void, onStockClick: (symbol: string) => void }) => {
   const [overview, setOverview] = useState<MarketOverview | null>(null);
@@ -62,7 +96,7 @@ export const MarketOverviewView = ({ onSectorClick, onStockClick }: { onSectorCl
       <div className="bg-card border border-border p-10 rounded-[3rem] relative overflow-hidden">
         <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/5 blur-[100px] -mr-32 -mt-32" />
         <div className="relative z-10 flex flex-col md:flex-row justify-between items-end gap-8">
-          <div>
+          <div className="flex-1">
             <div className="flex items-center gap-2 mb-4">
               <Activity size={20} className="text-green-500" />
               <span className="text-xs font-bold text-gray-500 uppercase tracking-[0.3em]">NGX All-Share Index (ASI)</span>
@@ -79,20 +113,127 @@ export const MarketOverviewView = ({ onSectorClick, onStockClick }: { onSectorCl
               <span className="text-xs text-gray-500 font-medium">Last Updated: {overview?.lastUpdated}</span>
             </div>
           </div>
-          <div className="hidden lg:block w-64 h-24 bg-foreground/5 rounded-2xl border border-border p-4">
-            <div className="flex justify-between items-center mb-2">
-              <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Market Sentiment</span>
-              <span className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Bullish</span>
+
+          {/* Market Breadth */}
+          <div className="w-full md:w-auto flex flex-col gap-4">
+            <div className="bg-foreground/5 rounded-2xl border border-border p-6 min-w-[280px]">
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Market Breadth</span>
+                <div className="flex gap-2">
+                  <span className="text-[10px] font-bold text-green-500">Advancing</span>
+                  <span className="text-[10px] font-bold text-red-500">Declining</span>
+                </div>
+              </div>
+              <div className="flex h-3 w-full rounded-full overflow-hidden mb-3">
+                {(() => {
+                  const up = overview?.sectors.filter(s => s.trend === 'up').length || 0;
+                  const down = overview?.sectors.filter(s => s.trend === 'down').length || 0;
+                  const neutral = overview?.sectors.filter(s => s.trend === 'neutral').length || 0;
+                  const total = up + down + neutral || 1;
+                  return (
+                    <>
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${(up/total)*100}%` }} className="bg-green-500 h-full" />
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${(neutral/total)*100}%` }} className="bg-gray-400 h-full" />
+                      <motion.div initial={{ width: 0 }} animate={{ width: `${(down/total)*100}%` }} className="bg-red-500 h-full" />
+                    </>
+                  );
+                })()}
+              </div>
+              <div className="flex justify-between text-[10px] font-bold uppercase tracking-tighter">
+                <span className="text-green-500">{overview?.sectors.filter(s => s.trend === 'up').length} Up</span>
+                <span className="text-gray-400">{overview?.sectors.filter(s => s.trend === 'neutral').length} Flat</span>
+                <span className="text-red-500">{overview?.sectors.filter(s => s.trend === 'down').length} Down</span>
+              </div>
             </div>
-            <div className="w-full h-2 bg-foreground/10 rounded-full overflow-hidden">
-              <motion.div 
-                initial={{ width: 0 }}
-                animate={{ width: '75%' }}
-                className="h-full bg-green-500"
-              />
-            </div>
-            <p className="text-[10px] text-gray-500 mt-2">75% of sectors are showing positive momentum today.</p>
           </div>
+        </div>
+      </div>
+
+      {/* Sector Performance Visualization */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 bg-card border border-border p-8 rounded-[2.5rem] space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-bold">Sector Performance</h3>
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Daily % Change</span>
+          </div>
+          <div className="h-[300px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                layout="vertical"
+                data={overview?.sectors.map(s => ({
+                  name: s.name,
+                  value: parseFloat(s.changePercent.replace('%', '').replace('+', ''))
+                })).sort((a, b) => b.value - a.value)}
+                margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="rgba(255,255,255,0.05)" />
+                <XAxis type="number" hide />
+                <YAxis 
+                  dataKey="name" 
+                  type="category" 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fontSize: 10, fontWeight: 600, fill: '#6b7280' }}
+                  width={100}
+                />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      const val = payload[0].value as number;
+                      return (
+                        <div className="bg-background border border-border p-3 rounded-xl shadow-xl">
+                          <p className="text-xs font-bold mb-1">{payload[0].payload.name}</p>
+                          <p className={cn("text-sm font-bold", val >= 0 ? "text-green-500" : "text-red-500")}>
+                            {val >= 0 ? '+' : ''}{val}%
+                          </p>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Bar dataKey="value" radius={[0, 4, 4, 0]} barSize={20}>
+                  {overview?.sectors.map((entry, index) => {
+                    const val = parseFloat(entry.changePercent.replace('%', '').replace('+', ''));
+                    return <Cell key={`cell-${index}`} fill={val >= 0 ? '#22c55e' : '#ef4444'} fillOpacity={0.8} />;
+                  })}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div className="bg-card border border-border p-8 rounded-[2.5rem] space-y-6">
+          <h3 className="text-xl font-bold">Market Heatmap</h3>
+          <div className="grid grid-cols-2 gap-3">
+            {overview?.sectors.map((sector, i) => {
+              const val = parseFloat(sector.changePercent.replace('%', '').replace('+', ''));
+              return (
+                <motion.div
+                  key={i}
+                  whileHover={{ scale: 1.02 }}
+                  onClick={() => onSectorClick(sector.name)}
+                  className={cn(
+                    "p-4 rounded-2xl border cursor-pointer transition-all flex flex-col justify-between h-24",
+                    val > 1 ? "bg-green-500/20 border-green-500/30" :
+                    val > 0 ? "bg-green-500/10 border-green-500/20" :
+                    val < -1 ? "bg-red-500/20 border-red-500/30" :
+                    "bg-red-500/10 border-red-500/20"
+                  )}
+                >
+                  <span className="text-[10px] font-bold uppercase tracking-tight line-clamp-1">{sector.name}</span>
+                  <span className={cn(
+                    "text-lg font-bold",
+                    val >= 0 ? "text-green-500" : "text-red-500"
+                  )}>
+                    {sector.changePercent}
+                  </span>
+                </motion.div>
+              );
+            })}
+          </div>
+          <p className="text-[10px] text-gray-500 text-center italic">Click a sector to explore top stocks</p>
         </div>
       </div>
 
@@ -111,11 +252,19 @@ export const MarketOverviewView = ({ onSectorClick, onStockClick }: { onSectorCl
                 <h3 className="text-2xl font-bold mb-1 group-hover:text-green-500 transition-colors">{sector.name}</h3>
                 <p className="text-xs text-gray-500 line-clamp-1">{sector.description}</p>
               </div>
-              <div className={cn(
-                "px-3 py-1 rounded-full text-xs font-bold",
-                sector.trend === 'up' ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
-              )}>
-                {sector.changePercent}
+              <div className="flex flex-col items-end gap-2">
+                <div className={cn(
+                  "px-3 py-1 rounded-full text-xs font-bold",
+                  sector.trend === 'up' ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
+                )}>
+                  {sector.changePercent}
+                </div>
+                {sector.trendData && (
+                  <MiniSparkline 
+                    data={sector.trendData} 
+                    color={sector.trend === 'up' ? '#22c55e' : '#ef4444'} 
+                  />
+                )}
               </div>
             </div>
 
@@ -180,17 +329,116 @@ export const MarketOverviewView = ({ onSectorClick, onStockClick }: { onSectorCl
 
 export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData }: { data: any[], timeframe: string, setTimeframe: (tf: string) => void, historicalData?: { [key: string]: any[] } }) => {
   const [chartData, setChartData] = useState(data);
+  const [showMACD, setShowMACD] = useState(false);
+  const [showRSI, setShowRSI] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  const [macdConfig, setMacdConfig] = useState({ fast: 12, slow: 26, signal: 9 });
+  const [rsiConfig, setRsiConfig] = useState({ period: 14 });
 
   useEffect(() => {
     if (timeframe === '1M') setChartData(data);
     else if (historicalData && historicalData[timeframe]) setChartData(historicalData[timeframe]);
   }, [timeframe, data, historicalData]);
 
+  const indicatorsData = useMemo(() => {
+    if (!chartData || chartData.length === 0) return [];
+
+    const prices = chartData.map(d => d.price);
+    
+    const calculateEMA = (values: number[], period: number) => {
+      const k = 2 / (period + 1);
+      let ema = [values[0]];
+      for (let i = 1; i < values.length; i++) {
+        ema.push(values[i] * k + ema[i - 1] * (1 - k));
+      }
+      return ema;
+    };
+
+    const fastEMA = calculateEMA(prices, macdConfig.fast);
+    const slowEMA = calculateEMA(prices, macdConfig.slow);
+    const macdLine = fastEMA.map((f, i) => f - slowEMA[i]);
+    const signalLine = calculateEMA(macdLine, macdConfig.signal);
+    const histogram = macdLine.map((m, i) => m - signalLine[i]);
+
+    const calculateRSI = (values: number[], period: number) => {
+      let rsi = new Array(values.length).fill(null);
+      if (values.length <= period) return rsi;
+
+      let gains = 0;
+      let losses = 0;
+
+      for (let i = 1; i <= period; i++) {
+        const diff = values[i] - values[i - 1];
+        if (diff >= 0) gains += diff;
+        else losses -= diff;
+      }
+
+      let avgGain = gains / period;
+      let avgLoss = losses / period;
+
+      for (let i = period; i < values.length; i++) {
+        if (i > period) {
+          const diff = values[i] - values[i - 1];
+          const gain = diff >= 0 ? diff : 0;
+          const loss = diff < 0 ? -diff : 0;
+          avgGain = (avgGain * (period - 1) + gain) / period;
+          avgLoss = (avgLoss * (period - 1) + loss) / period;
+        }
+
+        const rs = avgLoss === 0 ? 100 : avgGain / avgLoss;
+        rsi[i] = 100 - (100 / (1 + rs));
+      }
+      return rsi;
+    };
+
+    const rsiValues = calculateRSI(prices, rsiConfig.period);
+
+    return chartData.map((d, i) => ({
+      ...d,
+      macd: macdLine[i],
+      signal: signalLine[i],
+      histogram: histogram[i],
+      rsi: rsiValues[i]
+    }));
+  }, [chartData, macdConfig, rsiConfig]);
+
   return (
     <div className="space-y-6 mt-8 pt-8 border-t border-border">
-      <div className="flex items-center justify-between">
-        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Performance Chart</h3>
-        <div className="flex bg-foreground/5 p-1 rounded-xl">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Performance Chart</h3>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setShowMACD(!showMACD)}
+              className={cn(
+                "px-2 py-1 text-[10px] font-bold rounded border transition-all",
+                showMACD ? "bg-blue-500/10 text-blue-500 border-blue-500/30" : "text-gray-500 border-border hover:border-gray-400"
+              )}
+            >
+              MACD
+            </button>
+            <button 
+              onClick={() => setShowRSI(!showRSI)}
+              className={cn(
+                "px-2 py-1 text-[10px] font-bold rounded border transition-all",
+                showRSI ? "bg-purple-500/10 text-purple-500 border-purple-500/30" : "text-gray-500 border-border hover:border-gray-400"
+              )}
+            >
+              RSI
+            </button>
+            <button 
+              onClick={() => setShowSettings(!showSettings)}
+              className={cn(
+                "p-1 text-gray-500 rounded border border-border hover:border-gray-400 transition-all",
+                showSettings && "bg-foreground/5"
+              )}
+            >
+              <Settings size={14} />
+            </button>
+          </div>
+        </div>
+        <div className="flex bg-foreground/5 p-1 rounded-xl w-fit">
           {['1D', '1M', '1Y'].map((tf) => (
             <button 
               key={tf}
@@ -205,54 +453,208 @@ export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData 
           ))}
         </div>
       </div>
-      <div className="h-[300px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData}>
-            <defs>
-              <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#22C55E" stopOpacity={0.3}/>
-                <stop offset="95%" stopColor="#22C55E" stopOpacity={0}/>
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" vertical={false} />
-            <XAxis 
-              dataKey="date" 
-              stroke="currentColor"
-              className="text-gray-500"
-              fontSize={10} 
-              tickLine={false} 
-              axisLine={false}
-              tickFormatter={(val) => {
-                if (timeframe === '1D') return val.split(' ')[1] || val;
-                return val.split('-')[2] || val;
-              }}
-            />
-            <YAxis 
-              stroke="currentColor"
-              className="text-gray-500"
-              fontSize={10} 
-              tickLine={false} 
-              axisLine={false}
-              tickFormatter={(val) => `₦${val}`}
-              domain={['auto', 'auto']}
-            />
-            <Tooltip 
-              contentStyle={{ backgroundColor: 'var(--card)', border: '1px solid var(--border)', borderRadius: '16px', fontSize: '12px', color: 'var(--foreground)' }}
-              itemStyle={{ color: '#22C55E' }}
-              labelStyle={{ color: 'var(--foreground)', opacity: 0.6, marginBottom: '4px' }}
-              formatter={(val: any) => [`₦${val}`, 'Price']}
-            />
-            <Area 
-              type="monotone" 
-              dataKey="price" 
-              stroke="#22C55E" 
-              strokeWidth={2}
-              fillOpacity={1} 
-              fill="url(#colorPrice)" 
-              animationDuration={1500}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
+
+      {showSettings && (
+        <motion.div 
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="p-4 bg-foreground/5 rounded-2xl border border-border grid grid-cols-1 md:grid-cols-2 gap-6"
+        >
+          <div className="space-y-3">
+            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">MACD Parameters</h4>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <label className="text-[8px] text-gray-500 uppercase block mb-1">Fast</label>
+                <input 
+                  type="number" 
+                  value={macdConfig.fast}
+                  onChange={(e) => setMacdConfig({ ...macdConfig, fast: parseInt(e.target.value) || 1 })}
+                  className="w-full bg-background border border-border rounded p-1 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-[8px] text-gray-500 uppercase block mb-1">Slow</label>
+                <input 
+                  type="number" 
+                  value={macdConfig.slow}
+                  onChange={(e) => setMacdConfig({ ...macdConfig, slow: parseInt(e.target.value) || 1 })}
+                  className="w-full bg-background border border-border rounded p-1 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-[8px] text-gray-500 uppercase block mb-1">Signal</label>
+                <input 
+                  type="number" 
+                  value={macdConfig.signal}
+                  onChange={(e) => setMacdConfig({ ...macdConfig, signal: parseInt(e.target.value) || 1 })}
+                  className="w-full bg-background border border-border rounded p-1 text-xs"
+                />
+              </div>
+            </div>
+          </div>
+          <div className="space-y-3">
+            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">RSI Parameters</h4>
+            <div>
+              <label className="text-[8px] text-gray-500 uppercase block mb-1">Period</label>
+              <input 
+                type="number" 
+                value={rsiConfig.period}
+                onChange={(e) => setRsiConfig({ ...rsiConfig, period: parseInt(e.target.value) || 1 })}
+                className="w-full bg-background border border-border rounded p-1 text-xs max-w-[100px]"
+              />
+            </div>
+          </div>
+        </motion.div>
+      )}
+
+      <div className="space-y-4">
+        <div className="h-[300px] w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={indicatorsData}>
+              <defs>
+                <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor="#22C55E" stopOpacity={0.3}/>
+                  <stop offset="95%" stopColor="#22C55E" stopOpacity={0}/>
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" vertical={false} />
+              <XAxis 
+                dataKey="date" 
+                stroke="currentColor"
+                className="text-gray-500"
+                fontSize={10} 
+                tickLine={false} 
+                axisLine={false}
+                tickFormatter={(val) => {
+                  const s = String(val);
+                  if (timeframe === '1D') return s.split(' ')[1] || s;
+                  return s.split('-')[2] || s;
+                }}
+              />
+              <YAxis 
+                stroke="currentColor"
+                className="text-gray-500"
+                fontSize={10} 
+                tickLine={false} 
+                axisLine={false}
+                tickFormatter={(val) => `₦${val}`}
+                domain={['auto', 'auto']}
+              />
+              <Tooltip 
+                content={({ active, payload, label }) => {
+                  if (active && payload && payload.length) {
+                    const labelStr = String(label);
+                    const hasSpace = labelStr.includes(' ');
+                    return (
+                      <div className="bg-card border border-border p-4 rounded-2xl shadow-2xl backdrop-blur-md">
+                        <div className="flex flex-col gap-1">
+                          <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">
+                            {hasSpace ? labelStr.split(' ')[0] : 'Date'}
+                          </span>
+                          <span className="text-sm font-bold">{hasSpace ? labelStr.split(' ')[1] : labelStr}</span>
+                          <div className="h-px bg-border my-1" />
+                          {payload.map((p, i) => (
+                            <div key={i} className="flex flex-col">
+                              <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: p.color }}>{p.name}</span>
+                              <span className="text-lg font-bold">
+                                {p.name === 'Price' ? `₦${p.value}` : (p.value as number).toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                }}
+              />
+              <Area 
+                type="monotone" 
+                dataKey="price" 
+                name="Price"
+                stroke="#22C55E" 
+                strokeWidth={2}
+                fillOpacity={1} 
+                fill="url(#colorPrice)" 
+                animationDuration={1500}
+              />
+              <Brush 
+                dataKey="date" 
+                height={30} 
+                stroke="#22C55E" 
+                fill="rgba(34, 197, 94, 0.05)"
+                className="text-[10px] font-bold"
+                tickFormatter={(val) => {
+                  const s = String(val);
+                  if (timeframe === '1D') return s.split(' ')[1] || s;
+                  return s.split('-')[2] || s;
+                }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+
+        {showMACD && (
+          <div className="h-[150px] w-full">
+            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">MACD ({macdConfig.fast}, {macdConfig.slow}, {macdConfig.signal})</h4>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={indicatorsData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" vertical={false} />
+                <XAxis dataKey="date" hide />
+                <YAxis fontSize={8} axisLine={false} tickLine={false} />
+                <Tooltip 
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-card border border-border p-2 rounded-lg shadow-xl">
+                          {payload.map((p, i) => (
+                            <div key={i} className="flex justify-between gap-4">
+                              <span className="text-[8px] font-bold uppercase" style={{ color: p.color }}>{p.name}</span>
+                              <span className="text-[10px] font-bold">{(p.value as number).toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Line type="monotone" dataKey="macd" name="MACD" stroke="#3B82F6" dot={false} strokeWidth={1.5} />
+                <Line type="monotone" dataKey="signal" name="Signal" stroke="#F59E0B" dot={false} strokeWidth={1.5} />
+                <Bar dataKey="histogram" name="Histogram" fill="#94A3B8" fillOpacity={0.5} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {showRSI && (
+          <div className="h-[150px] w-full">
+            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">RSI ({rsiConfig.period})</h4>
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={indicatorsData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" vertical={false} />
+                <XAxis dataKey="date" hide />
+                <YAxis domain={[0, 100]} fontSize={8} axisLine={false} tickLine={false} ticks={[30, 70]} />
+                <ReferenceLine y={70} stroke="#EF4444" strokeDasharray="3 3" label={{ value: 'Overbought', position: 'insideRight', fontSize: 8, fill: '#EF4444' }} />
+                <ReferenceLine y={30} stroke="#22C55E" strokeDasharray="3 3" label={{ value: 'Oversold', position: 'insideRight', fontSize: 8, fill: '#22C55E' }} />
+                <Tooltip 
+                  content={({ active, payload }) => {
+                    if (active && payload && payload.length) {
+                      return (
+                        <div className="bg-card border border-border p-2 rounded-lg shadow-xl">
+                          <span className="text-[8px] font-bold uppercase text-purple-500">RSI</span>
+                          <span className="text-[10px] font-bold ml-2">{(payload[0].value as number).toFixed(2)}</span>
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Line type="monotone" dataKey="rsi" name="RSI" stroke="#A855F7" dot={false} strokeWidth={1.5} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        )}
       </div>
     </div>
   );
