@@ -365,6 +365,14 @@ export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData 
 
 export const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, onViewDetails, onCompare }: { stock: StockData, compact?: boolean, onWatch: (s: StockData) => void, isWatched: boolean, onViewDetails?: (s: StockData) => void, onCompare?: (s: StockData) => void }) => {
   const [timeframe, setTimeframe] = useState('1M');
+  const [activeTab, setActiveTab] = useState('overview');
+
+  const tabs = [
+    { id: 'overview', label: 'Overview', icon: <Activity size={16} /> },
+    { id: 'analysis', label: 'AI Analysis', icon: <Zap size={16} /> },
+    { id: 'news', label: 'News Feed', icon: <Globe size={16} />, count: stock.news?.length },
+    { id: 'corporate', label: 'Corporate Actions', icon: <PieChart size={16} />, count: stock.splits?.length },
+  ];
 
   return (
     <div className={cn("space-y-8", compact ? "bg-card border border-border p-6 rounded-3xl" : "")}>
@@ -500,92 +508,162 @@ export const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, 
       </div>
 
       {!compact && (
+        <div className="flex items-center gap-1 p-1 bg-foreground/5 rounded-2xl w-fit">
+          {tabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={cn(
+                "px-6 py-3 rounded-xl text-sm font-bold transition-all flex items-center gap-2",
+                activeTab === tab.id 
+                  ? "bg-card text-foreground shadow-sm" 
+                  : "text-gray-500 hover:text-foreground hover:bg-foreground/5"
+              )}
+            >
+              {tab.icon}
+              {tab.label}
+              {tab.count !== undefined && tab.count > 0 && (
+                <span className={cn(
+                  "px-1.5 py-0.5 rounded-md text-[10px] font-bold",
+                  activeTab === tab.id ? "bg-green-500/10 text-green-500" : "bg-foreground/10 text-gray-500"
+                )}>
+                  {tab.count}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {activeTab === 'overview' && (
+        <div className="space-y-8">
+          <StockChart 
+            data={stock.chartData} 
+            timeframe={timeframe} 
+            setTimeframe={setTimeframe} 
+            historicalData={stock.historicalData}
+          />
+          
+          {!compact && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {(stock.metrics || []).map((metric, i) => (
+                <MetricCard key={i} {...metric} />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {activeTab === 'analysis' && (
         <div className="bg-card border border-border p-8 rounded-3xl">
-          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <Zap size={20} className="text-yellow-500" />
-            AI Intelligence Report
-          </h3>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              <Zap size={20} className="text-yellow-500" />
+              AI Intelligence Report
+            </h3>
+            <SpeakButton text={stock.aiSummary} />
+          </div>
           <div className="prose prose-invert max-w-none text-gray-500 leading-relaxed">
             <ReactMarkdown>{stock.aiSummary}</ReactMarkdown>
           </div>
         </div>
       )}
 
-      {!compact && stock.news && stock.news.length > 0 && (
+      {activeTab === 'news' && (
         <div className="bg-card border border-border p-8 rounded-3xl">
-          <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-            <Globe size={20} className="text-blue-500" />
-            Recent News & Market Sentiment
-          </h3>
-          <div className="space-y-4">
-            {stock.news.map((item, i) => (
-              <a 
-                key={i} 
-                href={item.url} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                className="block p-5 bg-foreground/5 rounded-2xl border border-border hover:border-blue-500/30 transition-all group"
-              >
-                <div className="flex justify-between items-start gap-4">
-                  <div className="flex-1">
-                    <h4 className="font-bold text-sm mb-2 group-hover:text-blue-500 transition-colors line-clamp-2">
-                      {item.headline}
-                    </h4>
-                    <div className="flex items-center gap-3">
-                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">{item.source}</span>
-                      <span className="w-1 h-1 rounded-full bg-gray-300 dark:bg-gray-700" />
-                      <span className="text-[10px] text-gray-500">{item.date}</span>
+          <div className="flex items-center justify-between mb-6">
+            <h3 className="text-xl font-bold flex items-center gap-2">
+              <Globe size={20} className="text-blue-500" />
+              Latest News Feed
+            </h3>
+            <div className="px-3 py-1 bg-blue-500/10 text-blue-500 text-[10px] font-bold rounded-full border border-blue-500/20">
+              Live Updates
+            </div>
+          </div>
+          
+          {stock.news && stock.news.length > 0 ? (
+            <div className="space-y-4">
+              {stock.news.map((item, i) => (
+                <motion.a 
+                  key={i} 
+                  href={item.url} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.1 }}
+                  className="block p-6 bg-foreground/5 rounded-2xl border border-border hover:border-blue-500/30 transition-all group"
+                >
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="px-2 py-0.5 bg-blue-500/10 text-blue-500 text-[10px] font-bold rounded uppercase tracking-widest">
+                          {item.source}
+                        </span>
+                        <span className="text-[10px] text-gray-500 font-medium">{item.date}</span>
+                      </div>
+                      <h4 className="font-bold text-base mb-3 group-hover:text-blue-500 transition-colors leading-snug">
+                        {item.headline}
+                      </h4>
+                      <div className="flex items-center gap-2 text-xs text-blue-500 font-bold opacity-0 group-hover:opacity-100 transition-all">
+                        Read Full Article <ArrowRight size={14} />
+                      </div>
+                    </div>
+                    <div className="w-12 h-12 bg-foreground/5 rounded-xl flex items-center justify-center text-gray-500 group-hover:text-blue-500 transition-colors shrink-0">
+                      <Globe size={20} />
                     </div>
                   </div>
-                  <div className="p-2 bg-foreground/5 rounded-lg text-gray-500 group-hover:text-blue-500 transition-colors">
-                    <ArrowRight size={14} />
-                  </div>
-                </div>
-              </a>
-            ))}
-          </div>
+                </motion.a>
+              ))}
+            </div>
+          ) : (
+            <div className="p-20 text-center bg-foreground/5 rounded-2xl border border-dashed border-border">
+              <Globe size={40} className="text-gray-500 mx-auto mb-4 opacity-20" />
+              <p className="text-gray-500 font-medium">No recent news found for {stock.symbol}</p>
+            </div>
+          )}
         </div>
       )}
 
-      {!compact && stock.splits && stock.splits.length > 0 && (
+      {activeTab === 'corporate' && (
         <div className="bg-card border border-border p-8 rounded-3xl">
           <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
             <PieChart size={20} className="text-blue-500" />
             Corporate Actions: Stock Splits
           </h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {stock.splits.map((split, i) => (
-              <div key={i} className="p-6 bg-foreground/5 rounded-2xl border border-border hover:border-blue-500/30 transition-all">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Date</span>
-                    <div className="text-sm font-bold">{split.date}</div>
+          
+          {stock.splits && stock.splits.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {stock.splits.map((split, i) => (
+                <div key={i} className="p-6 bg-foreground/5 rounded-2xl border border-border hover:border-blue-500/30 transition-all">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Date</span>
+                      <div className="text-sm font-bold">{split.date}</div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Ratio</span>
+                      <div className="text-sm font-bold text-blue-500">{split.ratio}</div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-1">Ratio</span>
-                    <div className="text-sm font-bold text-blue-500">{split.ratio}</div>
+                  <div className="mb-4">
+                    <span className={cn(
+                      "px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-widest",
+                      split.type === 'split' ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
+                    )}>
+                      {split.type === 'split' ? 'Stock Split' : 'Reverse Split'}
+                    </span>
                   </div>
+                  <p className="text-xs text-gray-500 leading-relaxed">{split.description}</p>
                 </div>
-                <div className="mb-4">
-                  <span className={cn(
-                    "px-2 py-0.5 text-[10px] font-bold rounded uppercase tracking-widest",
-                    split.type === 'split' ? "bg-green-500/10 text-green-500" : "bg-red-500/10 text-red-500"
-                  )}>
-                    {split.type === 'split' ? 'Stock Split' : 'Reverse Split'}
-                  </span>
-                </div>
-                <p className="text-xs text-gray-500 leading-relaxed">{split.description}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {!compact && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          {(stock.metrics || []).map((metric, i) => (
-            <MetricCard key={i} {...metric} />
-          ))}
+              ))}
+            </div>
+          ) : (
+            <div className="p-20 text-center bg-foreground/5 rounded-2xl border border-dashed border-border">
+              <PieChart size={40} className="text-gray-500 mx-auto mb-4 opacity-20" />
+              <p className="text-gray-500 font-medium">No recent corporate actions found for {stock.symbol}</p>
+            </div>
+          )}
         </div>
       )}
 
