@@ -86,6 +86,7 @@ const StockAnalysisView = lazy(() => import('./components/Views').then(m => ({ d
 const ProfileView = lazy(() => import('./components/Views').then(m => ({ default: m.ProfileView })));
 const MarketStatusView = lazy(() => import('./components/Views').then(m => ({ default: m.MarketStatusView })));
 const MarketOverviewView = lazy(() => import('./components/Views').then(m => ({ default: m.MarketOverviewView })));
+const LiveMarketBoardView = lazy(() => import('./components/Views').then(m => ({ default: m.LiveMarketBoardView })));
 
 // --- Helpers ---
 
@@ -120,6 +121,48 @@ export default function App() {
   const [lastRefreshed, setLastRefreshed] = useState<string>(new Date().toLocaleTimeString());
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [movementThreshold, setMovementThreshold] = useState(1.5);
+
+  // Sync notification settings with user profile
+  useEffect(() => {
+    if (userProfile) {
+      if (userProfile.notificationsEnabled !== undefined) {
+        setNotificationsEnabled(userProfile.notificationsEnabled);
+      }
+      if (userProfile.movementThreshold !== undefined) {
+        setMovementThreshold(userProfile.movementThreshold);
+      }
+    }
+  }, [userProfile]);
+
+  // Persist notification settings to Firestore
+  useEffect(() => {
+    if (user && userProfile) {
+      const userDocRef = doc(db, 'users', user.uid);
+      updateDoc(userDocRef, {
+        notificationsEnabled,
+        movementThreshold
+      }).catch(err => console.error("Failed to sync settings:", err));
+    }
+  }, [notificationsEnabled, movementThreshold, user]);
+
+  const handleUpdateProfile = async (data: Partial<UserProfile>) => {
+    if (!user) return;
+    try {
+      const userDocRef = doc(db, 'users', user.uid);
+      await updateDoc(userDocRef, data);
+      
+      // Also update Firebase Auth profile if displayName is changed
+      if (data.displayName) {
+        await updateProfile(user, { displayName: data.displayName });
+      }
+      
+      toast.success("Profile updated successfully");
+    } catch (error) {
+      console.error("Profile update failed", error);
+      toast.error("Failed to update profile");
+      throw error;
+    }
+  };
   const [selectedSector, setSelectedSector] = useState<string | null>(null);
   const [selectedMarketCap, setSelectedMarketCap] = useState<string | null>(null);
   const [selectedWatchlistTag, setSelectedWatchlistTag] = useState<string | null>(null);
@@ -150,7 +193,9 @@ export default function App() {
             displayName: currentUser.displayName || 'Investor',
             isPremium: true, // Default to true for testing phase
             searchCount: 0,
-            trendsClickCount: 0
+            trendsClickCount: 0,
+            notificationsEnabled: true,
+            movementThreshold: 1.5
           };
           await setDoc(userDocRef, {
             ...newProfile,
@@ -619,6 +664,12 @@ export default function App() {
                   onClick={() => { setActiveTab('market-status'); setIsMobileMenuOpen(false); }} 
                 />
                 <SidebarItem 
+                  icon={BarChart3} 
+                  label="Live Board" 
+                  active={activeTab === 'live-board'} 
+                  onClick={() => { setActiveTab('live-board'); setIsMobileMenuOpen(false); }} 
+                />
+                <SidebarItem 
                   icon={LayoutDashboard} 
                   label="Big Dashboard" 
                   active={activeTab === 'overview'} 
@@ -719,6 +770,12 @@ export default function App() {
             label="Market Status" 
             active={activeTab === 'market-status'} 
             onClick={() => setActiveTab('market-status')} 
+          />
+          <SidebarItem 
+            icon={BarChart3} 
+            label="Live Board" 
+            active={activeTab === 'live-board'} 
+            onClick={() => setActiveTab('live-board')} 
           />
           <SidebarItem 
             icon={LayoutDashboard} 
@@ -1856,15 +1913,35 @@ The NGX is dominated by a few key sectors. A well-diversified portfolio should t
               </motion.div>
             )}
 
-            {activeTab === 'profile' && (
+            {activeTab === 'profile' && userProfile && (
               <ProfileView 
-                user={{ name: 'Sasdraze', email: 'Sasdraze@gmail.com', plan: 'Premium Plan' }} 
+                user={userProfile} 
                 watchlistCount={watchlist.length}
                 notificationsEnabled={notificationsEnabled}
                 setNotificationsEnabled={setNotificationsEnabled}
                 movementThreshold={movementThreshold}
                 setMovementThreshold={setMovementThreshold}
+                onUpdateProfile={handleUpdateProfile}
               />
+            )}
+            {activeTab === 'profile' && !userProfile && (
+              <div className="max-w-4xl mx-auto p-20 bg-card border border-border rounded-[2.5rem] text-center">
+                <div className="w-20 h-20 bg-foreground/5 rounded-full flex items-center justify-center mx-auto mb-8">
+                  <UserIcon size={40} className="text-gray-500" />
+                </div>
+                <h2 className="text-3xl font-bold mb-4">Access Your Profile</h2>
+                <p className="text-gray-500 mb-8 max-w-md mx-auto">Log in to manage your account settings, view your subscription, and customize your notification preferences.</p>
+                <button 
+                  onClick={handleLogin}
+                  className="px-10 py-4 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-all shadow-lg shadow-green-500/20"
+                >
+                  Log In to Continue
+                </button>
+              </div>
+            )}
+
+            {activeTab === 'live-board' && (
+              <LiveMarketBoardView onSelectStock={handleViewDetails} />
             )}
           </AnimatePresence>
           </Suspense>

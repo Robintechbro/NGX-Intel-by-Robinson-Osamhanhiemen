@@ -14,10 +14,14 @@ import {
   ArrowRight,
   Settings,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  User as UserIcon,
+  CreditCard
 } from 'lucide-react';
-import { motion } from 'motion/react';
+import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
+import { toast } from 'sonner';
+import { UserProfile, MarketTrends, MarketOverview, StockData } from '../types';
 import { 
   AreaChart,
   Area,
@@ -35,9 +39,119 @@ import {
   ReferenceLine
 } from 'recharts';
 import ReactMarkdown from 'react-markdown';
-import { StockData, MarketTrends, MarketOverview } from '../types';
-import { getMarketTrends, getMarketOverview } from '../services/geminiService';
+import { getMarketTrends, getMarketOverview, getLiveMarketBoard } from '../services/geminiService';
 import { MetricCard, CompactMetric, LivePrice, SpeakButton } from './Common';
+
+export const LiveMarketBoardView = ({ onSelectStock }: { onSelectStock: (stock: StockData) => void }) => {
+  const [stocks, setStocks] = useState<StockData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [lastUpdated, setLastUpdated] = useState<string>('');
+
+  const fetchBoard = async () => {
+    const data = await getLiveMarketBoard();
+    if (data.length > 0) {
+      setStocks(data);
+      setLastUpdated(new Date().toLocaleTimeString());
+    }
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    fetchBoard();
+    const interval = setInterval(fetchBoard, 60000); // Refresh every minute
+    return () => clearInterval(interval);
+  }, []);
+
+  const sortedStocks = useMemo(() => {
+    return [...stocks].sort((a, b) => {
+      const aChange = parseFloat(a.changePercent.replace(/[^\d.-]/g, '')) || 0;
+      const bChange = parseFloat(b.changePercent.replace(/[^\d.-]/g, '')) || 0;
+      return bChange - aChange;
+    });
+  }, [stocks]);
+
+  if (loading && stocks.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] gap-4">
+        <Loader2 className="animate-spin text-green-500" size={48} />
+        <p className="text-gray-500 font-medium animate-pulse">Loading Live Market Board...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-8 pb-20">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+          <h2 className="text-3xl font-bold tracking-tight">Live Market Board</h2>
+          <p className="text-gray-500 text-sm">Real-time performance of all major NGX listed companies. Stocks are automatically ranked by daily performance.</p>
+        </div>
+        <div className="flex items-center gap-3 px-4 py-2 bg-foreground/5 rounded-2xl border border-border">
+          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Live Updates • {lastUpdated}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+        <AnimatePresence mode="popLayout">
+          {sortedStocks.map((stock, index) => (
+            <motion.div
+              key={stock.symbol}
+              layout
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ 
+                type: "spring", 
+                stiffness: 300, 
+                damping: 30,
+                opacity: { duration: 0.2 }
+              }}
+              onClick={() => onSelectStock(stock)}
+              className="bg-card border border-border p-5 rounded-3xl hover:border-green-500/30 transition-all cursor-pointer group relative overflow-hidden flex flex-col justify-between h-[200px]"
+            >
+              <div className="absolute top-0 right-0 p-3">
+                <div className="text-[10px] font-bold text-gray-400 bg-foreground/5 px-2 py-1 rounded-lg">
+                  #{index + 1}
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <h3 className="font-bold text-lg truncate pr-8 group-hover:text-green-500 transition-colors">{stock.name}</h3>
+                <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest">{stock.symbol} • {stock.sector}</p>
+              </div>
+
+              <div className="flex items-end justify-between gap-4 mt-4">
+                <div className="space-y-1">
+                  <div className="text-xl font-bold">{stock.price}</div>
+                  <div className={cn(
+                    "text-xs font-bold flex items-center gap-1",
+                    stock.change.includes('+') ? "text-green-500" : "text-red-500"
+                  )}>
+                    {stock.change.includes('+') ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                    {stock.change} ({stock.changePercent})
+                  </div>
+                </div>
+                
+                <div className="w-24 h-12">
+                  <MiniSparkline 
+                    data={stock.chartData?.map(d => ({ value: d.price })) || []} 
+                    color={stock.change.includes('+') ? "#22C55E" : "#EF4444"} 
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 pt-4 border-t border-border flex items-center justify-between">
+                <div className="text-[8px] text-gray-500 font-bold uppercase tracking-[0.1em]">Market Cap</div>
+                <div className="text-[10px] font-bold">{stock.marketCap}</div>
+              </div>
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+};
 
 const MiniSparkline = ({ data, color }: { data: { value: number }[], color: string }) => (
   <div className="h-12 w-24">
@@ -666,119 +780,205 @@ export const ProfileView = ({
   notificationsEnabled, 
   setNotificationsEnabled,
   movementThreshold,
-  setMovementThreshold
+  setMovementThreshold,
+  onUpdateProfile
 }: { 
-  user: { name: string, email: string, plan: string }, 
+  user: UserProfile, 
   watchlistCount: number,
   notificationsEnabled: boolean,
   setNotificationsEnabled: (val: boolean) => void,
   movementThreshold: number,
-  setMovementThreshold: (val: number) => void
-}) => (
-  <motion.div 
-    initial={{ opacity: 0, y: 20 }}
-    animate={{ opacity: 1, y: 0 }}
-    className="max-w-4xl mx-auto space-y-8"
-  >
-    <div className="flex items-center gap-6 p-8 bg-[#111] border border-white/5 rounded-[2.5rem]">
-      <div className="w-24 h-24 rounded-full bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center text-3xl font-bold text-black">
-        {user.name.charAt(0)}
-      </div>
-      <div>
-        <h2 className="text-3xl font-bold mb-1">{user.name}</h2>
-        <p className="text-gray-500 mb-4">{user.email}</p>
-        <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-400/10 text-green-400 text-xs font-bold rounded-full border border-green-400/20">
-          <Zap size={12} className="fill-green-400" />
-          {user.plan}
+  setMovementThreshold: (val: number) => void,
+  onUpdateProfile: (data: Partial<UserProfile>) => Promise<void>
+}) => {
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [newName, setNewName] = useState(user.displayName);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSaveName = async () => {
+    if (!newName.trim()) return;
+    setIsSaving(true);
+    try {
+      await onUpdateProfile({ displayName: newName });
+      setIsEditingName(false);
+      toast.success("Profile updated successfully");
+    } catch (error) {
+      toast.error("Failed to update profile");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <motion.div 
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="max-w-4xl mx-auto space-y-8 pb-20"
+    >
+      <div className="flex flex-col md:flex-row items-center gap-8 p-8 bg-card border border-border rounded-[2.5rem] relative overflow-hidden">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-green-500/5 blur-[100px] -mr-32 -mt-32" />
+        
+        <div className="relative">
+          <div className="w-32 h-32 rounded-full bg-gradient-to-br from-green-400 to-blue-500 flex items-center justify-center text-5xl font-bold text-black shadow-xl">
+            {user.displayName.charAt(0)}
+          </div>
+          <div className="absolute -bottom-2 -right-2 p-2 bg-background border border-border rounded-full shadow-lg">
+            <UserIcon size={16} className="text-gray-500" />
+          </div>
+        </div>
+
+        <div className="flex-1 text-center md:text-left space-y-4">
+          {isEditingName ? (
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <input 
+                type="text" 
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                className="bg-foreground/5 border border-border rounded-xl px-4 py-2 text-2xl font-bold focus:outline-none focus:border-green-500 transition-all w-full max-w-xs"
+                autoFocus
+              />
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleSaveName}
+                  disabled={isSaving}
+                  className="px-4 py-2 bg-green-500 text-white rounded-xl font-bold text-sm hover:bg-green-600 transition-all disabled:opacity-50"
+                >
+                  {isSaving ? <Loader2 size={16} className="animate-spin" /> : "Save"}
+                </button>
+                <button 
+                  onClick={() => { setIsEditingName(false); setNewName(user.displayName); }}
+                  className="px-4 py-2 bg-foreground/5 text-gray-500 rounded-xl font-bold text-sm hover:bg-foreground/10 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row items-center gap-3">
+              <h2 className="text-4xl font-bold tracking-tight">{user.displayName}</h2>
+              <button 
+                onClick={() => setIsEditingName(true)}
+                className="p-2 hover:bg-foreground/5 rounded-lg text-gray-500 transition-colors"
+              >
+                <Settings size={16} />
+              </button>
+            </div>
+          )}
+          
+          <div className="flex flex-wrap justify-center md:justify-start items-center gap-4">
+            <p className="text-gray-500 font-medium">{user.email}</p>
+            <div className="w-1 h-1 rounded-full bg-border hidden sm:block" />
+            <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-500/10 text-green-500 text-xs font-bold rounded-full border border-green-500/20">
+              <Zap size={12} className="fill-green-500" />
+              {user.isPremium ? "Premium Plan" : "Free Plan"}
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div className="bg-[#111] border border-white/5 p-8 rounded-3xl text-center">
-        <div className="text-3xl font-bold mb-2">{watchlistCount}</div>
-        <div className="text-xs text-gray-500 uppercase tracking-widest font-bold">Watchlist Items</div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-card border border-border p-8 rounded-3xl text-center group hover:border-green-500/30 transition-all">
+          <div className="text-4xl font-bold mb-2 text-foreground group-hover:text-green-500 transition-colors">{watchlistCount}</div>
+          <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Watchlist Items</div>
+        </div>
+        <div className="bg-card border border-border p-8 rounded-3xl text-center group hover:border-blue-500/30 transition-all">
+          <div className="text-4xl font-bold mb-2 text-foreground group-hover:text-blue-500 transition-colors">{user.searchCount || 0}</div>
+          <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Analyses Run</div>
+        </div>
+        <div className="bg-card border border-border p-8 rounded-3xl text-center group hover:border-purple-500/30 transition-all">
+          <div className="text-4xl font-bold mb-2 text-foreground group-hover:text-purple-500 transition-colors">{user.trendsClickCount || 0}</div>
+          <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Trends Explored</div>
+        </div>
       </div>
-      <div className="bg-[#111] border border-white/5 p-8 rounded-3xl text-center">
-        <div className="text-3xl font-bold mb-2">4</div>
-        <div className="text-xs text-gray-500 uppercase tracking-widest font-bold">Academy Lessons</div>
-      </div>
-      <div className="bg-[#111] border border-white/5 p-8 rounded-3xl text-center">
-        <div className="text-3xl font-bold mb-2">12</div>
-        <div className="text-xs text-gray-500 uppercase tracking-widest font-bold">Analyses Run</div>
-      </div>
-    </div>
 
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div className="p-8 bg-[#111] border border-white/5 rounded-3xl">
-        <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-          <Bell size={20} className="text-gray-400" />
-          Notification Settings
-        </h3>
-        <div className="space-y-6">
-          <div className="flex items-center justify-between p-4 bg-white/5 rounded-2xl">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+        <div className="p-8 bg-card border border-border rounded-[2.5rem] space-y-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-blue-500/10 rounded-xl">
+              <Bell size={24} className="text-blue-500" />
+            </div>
+            <h3 className="text-xl font-bold">Notifications</h3>
+          </div>
+          
+          <div className="space-y-6">
+            <div className="flex items-center justify-between p-5 bg-foreground/5 rounded-2xl border border-border/50">
+              <div>
+                <div className="text-sm font-bold mb-1">Price Alerts</div>
+                <div className="text-[10px] text-gray-500 max-w-[200px]">Get notified when stocks in your watchlist move significantly.</div>
+              </div>
+              <button 
+                onClick={() => setNotificationsEnabled(!notificationsEnabled)}
+                className={cn(
+                  "w-12 h-6 rounded-full p-1 transition-all relative",
+                  notificationsEnabled ? "bg-green-500" : "bg-foreground/10"
+                )}
+              >
+                <motion.div 
+                  layout
+                  className="w-4 h-4 rounded-full bg-white shadow-sm"
+                  animate={{ x: notificationsEnabled ? 24 : 0 }}
+                />
+              </button>
+            </div>
+
+            <div className="p-5 bg-foreground/5 rounded-2xl border border-border/50 space-y-4">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold">Movement Threshold</span>
+                <span className="px-2 py-1 bg-green-500/10 text-green-500 text-xs font-bold rounded-lg">{movementThreshold}%</span>
+              </div>
+              <input 
+                type="range" 
+                min="0.5" 
+                max="10" 
+                step="0.5" 
+                value={movementThreshold}
+                onChange={(e) => setMovementThreshold(parseFloat(e.target.value))}
+                className="w-full accent-green-500 h-1.5 bg-foreground/10 rounded-full appearance-none cursor-pointer"
+              />
+              <div className="flex justify-between text-[8px] font-bold text-gray-500 uppercase tracking-widest">
+                <span>Sensitive</span>
+                <span>Conservative</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="p-8 bg-card border border-border rounded-[2.5rem] space-y-8">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-purple-500/10 rounded-xl">
+              <Shield size={24} className="text-purple-500" />
+            </div>
+            <h3 className="text-xl font-bold">Subscription</h3>
+          </div>
+
+          <div className="p-6 bg-gradient-to-br from-green-500/10 to-blue-500/10 border border-green-500/20 rounded-2xl space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Current Status</span>
+              <span className="px-2 py-1 bg-green-500 text-white text-[10px] font-bold rounded-full uppercase">Active</span>
+            </div>
             <div>
-              <div className="text-sm font-medium">Price Change Alerts</div>
-              <div className="text-[10px] text-gray-500">Notify me of significant price movements in my watchlist.</div>
+              <div className="text-2xl font-bold mb-1">{user.isPremium ? "Premium NGX Intel" : "Free Tier"}</div>
+              <p className="text-xs text-gray-500">
+                {user.isPremium 
+                  ? "You have full access to real-time AI analysis, unlimited watchlists, and advanced charting tools."
+                  : "Upgrade to Premium for real-time AI analysis and unlimited watchlists."}
+              </p>
             </div>
-            <button 
-              onClick={() => setNotificationsEnabled(!notificationsEnabled)}
-              className={cn(
-                "w-12 h-6 rounded-full p-1 transition-all",
-                notificationsEnabled ? "bg-green-400" : "bg-white/10"
-              )}
-            >
-              <div className={cn(
-                "w-4 h-4 rounded-full bg-black transition-all",
-                notificationsEnabled ? "translate-x-6" : "translate-x-0"
-              )} />
-            </button>
+            <div className="pt-4 flex items-center justify-between border-t border-border/50">
+              <div className="text-xs font-bold">₦5,000 / month</div>
+              <button className="text-[10px] font-bold text-blue-500 uppercase tracking-widest hover:underline">View Billing History</button>
+            </div>
           </div>
 
-          <div className="p-4 bg-foreground/5 rounded-2xl">
-            <div className="flex justify-between items-center mb-4">
-              <span className="text-sm font-medium">Alert Threshold</span>
-              <span className="text-xs font-bold text-green-500">{movementThreshold}%</span>
-            </div>
-            <input 
-              type="range" 
-              min="0.5" 
-              max="10" 
-              step="0.5" 
-              value={movementThreshold}
-              onChange={(e) => setMovementThreshold(parseFloat(e.target.value))}
-              className="w-full accent-green-500"
-            />
-            <div className="flex justify-between mt-2">
-              <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">Sensitive (0.5%)</span>
-              <span className="text-[8px] text-gray-500 font-bold uppercase tracking-widest">Conservative (10%)</span>
-            </div>
-          </div>
+          <button className="w-full py-4 bg-foreground text-background rounded-2xl font-bold hover:opacity-90 transition-all flex items-center justify-center gap-2">
+            <CreditCard size={18} />
+            {user.isPremium ? "Manage Subscription" : "Upgrade to Premium"}
+          </button>
         </div>
       </div>
-
-      <div className="p-8 bg-card border border-border rounded-3xl">
-        <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
-          <Shield size={20} className="text-gray-500" />
-          Subscription & Billing
-        </h3>
-        <div className="p-6 bg-green-500/5 border border-green-500/10 rounded-2xl mb-6">
-          <div className="flex justify-between items-center mb-2">
-            <span className="text-sm font-bold text-green-500">Current Plan</span>
-            <span className="text-xs font-bold text-gray-500">₦5,000 / month</span>
-          </div>
-          <div className="text-xl font-bold mb-4 text-foreground">Premium NGX Intel</div>
-          <div className="text-xs text-gray-500 leading-relaxed">
-            Next billing date: April 30, 2026. You have access to all premium features including real-time AI analysis and unlimited watchlists.
-          </div>
-        </div>
-        <button className="w-full py-4 bg-foreground/5 rounded-2xl hover:bg-foreground/10 transition-all text-sm font-bold border border-border">
-          Manage Subscription
-        </button>
-      </div>
-    </div>
-  </motion.div>
-);
+    </motion.div>
+  );
+};
 
 export const MarketStatusView = () => {
   const [currentTime, setCurrentTime] = useState(new Date());

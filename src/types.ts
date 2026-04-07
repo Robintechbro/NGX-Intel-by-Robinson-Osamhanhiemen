@@ -89,4 +89,6 @@ export interface UserProfile {
   isPremium: boolean;
   searchCount: number;
   trendsClickCount: number;
+  notificationsEnabled?: boolean;
+  movementThreshold?: number;
 }

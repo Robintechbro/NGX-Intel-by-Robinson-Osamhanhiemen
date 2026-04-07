@@ -237,3 +237,42 @@ export async function refreshStocks(symbols: string[]): Promise<StockData[]> {
     return [];
   }
 }
+
+export async function getLiveMarketBoard(): Promise<StockData[]> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Current Date: ${new Date().toISOString()}.
+          Fetch a COMPREHENSIVE list of the top 30-40 most active companies listed on the Nigerian Stock Exchange (NGX).
+          
+          DATA FETCHING (CRITICAL):
+          You MUST use the Google Search tool to fetch the LATEST real-time data for these stocks. 
+          Include major companies like MTNN, DANGCEM, ZENITHBANK, GTCO, UBA, SEPLAT, NESTLE, FBNH, ACCESSCORP, GEREGU, BUACEMENT, BUAFOODS, PRESCO, OKOMUOIL, etc.
+          
+          JSON STRUCTURE:
+          Return strictly valid JSON: { "stocks": [ { ...StockData }, ... ] }
+          
+          STOCK DATA RULES:
+          - For each stock, include: symbol, name, price (₦), change, changePercent, sector, marketCap.
+          - Include 'chartData' with 15-20 historical points for a sparkline.
+          - 'lastUpdated': The timestamp of the data you found (e.g., "2024-03-20 14:30 WAT").
+          
+          Ensure the list is diverse across sectors (Banking, Industrial, Consumer, Oil & Gas, etc.).` }]
+        }
+      ],
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+      },
+    });
+
+    const result = JSON.parse(response.text || "{}");
+    return result.stocks || [];
+  } catch (error) {
+    console.error("Gemini Live Board Error:", error);
+    return [];
+  }
+}
