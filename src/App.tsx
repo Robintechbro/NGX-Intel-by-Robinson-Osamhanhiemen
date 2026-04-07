@@ -49,18 +49,6 @@ import { SearchResult, StockData, PriceAlert, MarketTrends, UserProfile } from '
 import { cn } from './lib/utils';
 import { Toaster, toast } from 'sonner';
 import { 
-  LineChart, 
-  Line, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
-  ResponsiveContainer,
-  AreaChart,
-  Area
-} from 'recharts';
-import ReactMarkdown from 'react-markdown';
-import { 
   auth, 
   db, 
   googleProvider, 
@@ -82,11 +70,12 @@ import { VoiceAgent } from './components/VoiceAgent';
 import { TagManager } from './components/TagManager';
 
 // --- Lazy Loaded Views ---
-const StockAnalysisView = lazy(() => import('./components/Views').then(m => ({ default: m.StockAnalysisView })));
-const ProfileView = lazy(() => import('./components/Views').then(m => ({ default: m.ProfileView })));
-const MarketStatusView = lazy(() => import('./components/Views').then(m => ({ default: m.MarketStatusView })));
-const MarketOverviewView = lazy(() => import('./components/Views').then(m => ({ default: m.MarketOverviewView })));
-const LiveMarketBoardView = lazy(() => import('./components/Views').then(m => ({ default: m.LiveMarketBoardView })));
+const StockAnalysisView = lazy(() => import('./components/StockAnalysisView').then(m => ({ default: m.StockAnalysisView })));
+const ProfileView = lazy(() => import('./components/ProfileView').then(m => ({ default: m.ProfileView })));
+const MarketStatusView = lazy(() => import('./components/MarketStatusView').then(m => ({ default: m.MarketStatusView })));
+const MarketOverviewView = lazy(() => import('./components/MarketOverviewView').then(m => ({ default: m.MarketOverviewView })));
+const LiveMarketBoardView = lazy(() => import('./components/LiveMarketBoardView').then(m => ({ default: m.LiveMarketBoardView })));
+const SearchResultsView = lazy(() => import('./components/SearchResultsView').then(m => ({ default: m.SearchResultsView })));
 
 // --- Helpers ---
 
@@ -1054,119 +1043,20 @@ export default function App() {
               </motion.div>
             )}
 
-            {(activeTab === 'analysis' || activeTab === 'comparison' || activeTab === 'discovery') && result && (
-              <motion.div 
-                key="search-result"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="max-w-6xl mx-auto space-y-8 pb-20"
-              >
-                {result.type === 'analysis' && result.data && (
-                  <StockAnalysisView 
-                    stock={result.data as StockData} 
-                    onWatch={addToWatchlist} 
-                    isWatched={isWatched((result.data as StockData).symbol)} 
-                    onCompare={handleCompareRequest}
-                  />
-                )}
-
-                {result.type === 'comparison' && Array.isArray(result.data) && (
-                  <div className="space-y-8">
-                    <div className="flex items-center justify-between">
-                      <h2 className="text-3xl font-bold">Stock Comparison</h2>
-                      <div className="px-4 py-2 bg-blue-400/10 text-blue-400 rounded-full text-xs font-bold border border-blue-400/20">
-                        Side-by-Side Analysis
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
-                      {(result.data as StockData[]).map((stock, i) => (
-                        <div key={i} className="space-y-6">
-                          <StockAnalysisView 
-                            stock={stock} 
-                            compact 
-                            onWatch={addToWatchlist} 
-                            isWatched={isWatched(stock.symbol)} 
-                            onViewDetails={handleViewDetails}
-                            onCompare={handleCompareRequest}
-                          />
-                        </div>
-                      ))}
-                    </div>
-                    <div className="bg-card border border-border p-8 rounded-3xl">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-xl font-bold flex items-center gap-2">
-                          <Zap size={20} className="text-yellow-500" />
-                          AI Comparison Verdict
-                        </h3>
-                        <SpeakButton text={result.message || ""} />
-                      </div>
-                      <div className="prose prose-invert max-w-none text-gray-500 leading-relaxed">
-                        <ReactMarkdown>{result.message || ""}</ReactMarkdown>
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {result.type === 'discovery' && Array.isArray(result.data) && (
-                  <div className="space-y-8">
-                    <div className="flex flex-col gap-2">
-                      <h2 className="text-3xl font-bold">Discovery Results</h2>
-                      <div className="prose prose-invert max-w-none text-gray-500 leading-relaxed">
-                        <ReactMarkdown>{result.message || ""}</ReactMarkdown>
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {(result.data as StockData[]).map((stock, i) => (
-                        <div key={i} className="bg-card border border-border p-6 rounded-2xl hover:border-green-500/30 transition-all group flex flex-col h-full">
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <h3 className="font-bold text-lg group-hover:text-green-500 transition-colors">{stock.name}</h3>
-                              <p className="text-xs text-gray-500">{stock.symbol} • {stock.sector}</p>
-                            </div>
-                            <div className="text-right">
-                              <LivePrice value={stock.price} change={stock.change} changePercent={stock.changePercent} size="small" />
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2 mb-4">
-                            <div className="flex-1 h-1 bg-foreground/5 rounded-full overflow-hidden">
-                              <div className="h-full bg-green-500" style={{ width: `${stock.investmentScore}%` }} />
-                            </div>
-                            <span className="text-[10px] font-bold text-gray-500">{stock.investmentScore}</span>
-                          </div>
-                          <p className="text-xs text-gray-500 line-clamp-2 mb-6 flex-1">{stock.aiSummary}</p>
-                          <div className="flex items-center gap-2 pt-4 border-t border-border mt-auto">
-                            <button 
-                              onClick={() => handleViewDetails(stock)}
-                              className="flex-1 px-4 py-2 bg-foreground/5 rounded-xl hover:bg-foreground/10 transition-all border border-border text-[10px] font-bold uppercase tracking-widest text-gray-500 hover:text-foreground flex items-center justify-center gap-2"
-                            >
-                              More Info <ArrowRight size={12} />
-                            </button>
-                            <button 
-                              onClick={() => addToWatchlist(stock)}
-                              className="p-2 bg-foreground/5 rounded-xl hover:bg-foreground/10 transition-all border border-border"
-                            >
-                              <Bookmark size={16} className={isWatched(stock.symbol) ? "fill-green-500 text-green-500" : "text-gray-500"} />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {result.type === 'error' && (
-                  <div className="bg-red-500/10 border border-red-500/20 p-8 rounded-3xl text-center">
-                    <h3 className="text-xl font-bold text-red-500 mb-2">Analysis Error</h3>
-                    <p className="text-gray-500">{result.message}</p>
-                    <button 
-                      onClick={() => setActiveTab('dashboard')}
-                      className="mt-6 px-6 py-2 bg-foreground/5 rounded-full hover:bg-foreground/10 transition-all text-sm font-medium"
-                    >
-                      Back to Dashboard
-                    </button>
-                  </div>
-                )}
-              </motion.div>
+            {result && (
+              <Suspense fallback={
+                <div className="flex flex-col items-center justify-center py-32 space-y-4">
+                  <Loader2 size={48} className="text-green-500 animate-spin" />
+                  <p className="text-gray-500 font-medium text-lg">Analyzing Market Data...</p>
+                </div>
+              }>
+                <SearchResultsView 
+                  result={result}
+                  onWatch={addToWatchlist}
+                  isWatched={isWatched}
+                  onStockClick={(symbol) => handleViewDetails({ symbol } as StockData)}
+                />
+              </Suspense>
             )}
 
             {activeTab === 'market-status' && (
@@ -1915,13 +1805,12 @@ The NGX is dominated by a few key sectors. A well-diversified portfolio should t
 
             {activeTab === 'profile' && userProfile && (
               <ProfileView 
-                user={userProfile} 
-                watchlistCount={watchlist.length}
+                userProfile={userProfile} 
+                onUpdateProfile={handleUpdateProfile}
                 notificationsEnabled={notificationsEnabled}
                 setNotificationsEnabled={setNotificationsEnabled}
                 movementThreshold={movementThreshold}
                 setMovementThreshold={setMovementThreshold}
-                onUpdateProfile={handleUpdateProfile}
               />
             )}
             {activeTab === 'profile' && !userProfile && (

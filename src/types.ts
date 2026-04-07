@@ -91,4 +91,8 @@ export interface UserProfile {
   trendsClickCount: number;
   notificationsEnabled?: boolean;
   movementThreshold?: number;
+  photoURL?: string;
+  watchlist?: string[];
+  analysesCount?: number;
+  trendsCount?: number;
 }
