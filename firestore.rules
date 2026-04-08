@@ -15,14 +15,15 @@ service cloud.firestore {
     //   - trendsClickCount: number (required)
     //   - createdAt: timestamp (optional)
     //
-    // Collection: feedback
-    // Document ID: {feedbackId}
+    // Collection: drawings
+    // Document ID: {drawingId}
     // Fields:
     //   - uid: string (required)
-    //   - email: string (required)
-    //   - type: string (required, 'suggestion' or 'issue')
-    //   - message: string (required)
-    //   - createdAt: timestamp (required)
+    //   - symbol: string (required)
+    //   - timeframe: string (required)
+    //   - trendlines: list (required)
+    //   - annotations: list (required)
+    //   - updatedAt: string (required)
     // ===============================================================
 
     // Helper Functions
@@ -79,6 +80,23 @@ service cloud.firestore {
                       request.resource.data.message.size() > 0 &&
                       request.resource.data.message.size() < 5000 &&
                       request.resource.data.createdAt == request.time;
+    }
+
+    match /drawings/{drawingId} {
+      // Users can read their own drawings
+      allow read: if isAuthenticated() && (resource == null || resource.data.uid == request.auth.uid);
+      
+      // Users can create/update their own drawings
+      allow create, update: if isAuthenticated() && 
+                             request.resource.data.uid == request.auth.uid &&
+                             request.resource.data.symbol is string &&
+                             request.resource.data.timeframe in ['1D', '1M', '1Y'] &&
+                             request.resource.data.trendlines is list &&
+                             request.resource.data.annotations is list &&
+                             request.resource.data.updatedAt is string;
+      
+      // Users can delete their own drawings
+      allow delete: if isAuthenticated() && resource.data.uid == request.auth.uid;
     }
 
     // Default deny

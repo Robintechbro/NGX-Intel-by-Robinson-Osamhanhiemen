@@ -114,10 +114,10 @@ export default function App() {
   // Sync notification settings with user profile
   useEffect(() => {
     if (userProfile) {
-      if (userProfile.notificationsEnabled !== undefined) {
+      if (userProfile.notificationsEnabled !== undefined && userProfile.notificationsEnabled !== notificationsEnabled) {
         setNotificationsEnabled(userProfile.notificationsEnabled);
       }
-      if (userProfile.movementThreshold !== undefined) {
+      if (userProfile.movementThreshold !== undefined && userProfile.movementThreshold !== movementThreshold) {
         setMovementThreshold(userProfile.movementThreshold);
       }
     }
@@ -126,13 +126,19 @@ export default function App() {
   // Persist notification settings to Firestore
   useEffect(() => {
     if (user && userProfile) {
+      // Only update if values are actually different from what's in userProfile
+      if (userProfile.notificationsEnabled === notificationsEnabled && 
+          userProfile.movementThreshold === movementThreshold) {
+        return;
+      }
+
       const userDocRef = doc(db, 'users', user.uid);
       updateDoc(userDocRef, {
         notificationsEnabled,
         movementThreshold
       }).catch(err => console.error("Failed to sync settings:", err));
     }
-  }, [notificationsEnabled, movementThreshold, user]);
+  }, [notificationsEnabled, movementThreshold, user, userProfile]);
 
   const handleUpdateProfile = async (data: Partial<UserProfile>) => {
     if (!user) return;
@@ -166,8 +172,17 @@ export default function App() {
 
   // Firebase Auth Listener
   useEffect(() => {
+    let unsubProfile: (() => void) | undefined;
+
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      
+      // Cleanup previous profile listener if it exists
+      if (unsubProfile) {
+        unsubProfile();
+        unsubProfile = undefined;
+      }
+
       if (currentUser) {
         // Fetch or create user profile
         const userDocRef = doc(db, 'users', currentUser.uid);
@@ -194,12 +209,11 @@ export default function App() {
         }
 
         // Listen for real-time profile updates
-        const unsubProfile = onSnapshot(userDocRef, (doc) => {
+        unsubProfile = onSnapshot(userDocRef, (doc) => {
           if (doc.exists()) {
             setUserProfile(doc.data() as UserProfile);
           }
         });
-        return () => unsubProfile();
       } else {
         setUserProfile(null);
         setMarketTrends(null);
@@ -207,7 +221,11 @@ export default function App() {
       }
       setIsAuthLoading(false);
     });
-    return () => unsubscribe();
+
+    return () => {
+      unsubscribe();
+      if (unsubProfile) unsubProfile();
+    };
   }, []);
 
   const handleLogin = () => {

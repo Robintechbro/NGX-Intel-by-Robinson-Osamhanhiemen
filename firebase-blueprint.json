@@ -27,6 +27,20 @@
         "createdAt": { "type": "string", "format": "date-time", "description": "When the feedback was submitted" }
       },
       "required": ["uid", "email", "type", "message", "createdAt"]
+    },
+    "Drawing": {
+      "title": "Stock Chart Drawings",
+      "description": "Stores user trendlines and annotations for a specific stock and timeframe",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user" },
+        "symbol": { "type": "string", "description": "The stock symbol" },
+        "timeframe": { "type": "string", "description": "The chart timeframe (1D, 1M, 1Y)" },
+        "trendlines": { "type": "array", "description": "List of trendlines" },
+        "annotations": { "type": "array", "description": "List of annotations" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "When the drawings were last updated" }
+      },
+      "required": ["uid", "symbol", "timeframe", "trendlines", "annotations", "updatedAt"]
     }
   },
   "firestore": {
@@ -37,6 +51,10 @@
     "/feedback/{feedbackId}": {
       "schema": "Feedback",
       "description": "User feedback submissions"
+    },
+    "/drawings/{drawingId}": {
+      "schema": "Drawing",
+      "description": "User chart drawings"
     }
   }
 }

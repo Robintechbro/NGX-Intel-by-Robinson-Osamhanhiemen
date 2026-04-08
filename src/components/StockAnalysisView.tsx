@@ -8,11 +8,28 @@ import {
   PieChart,
   Settings,
   ArrowRight,
-  Loader2
+  Loader2,
+  Pencil,
+  Type,
+  Eraser,
+  MousePointer2,
+  Trash2
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { StockData } from '../types';
+import { toast } from 'sonner';
+import { 
+  auth, 
+  db, 
+  onAuthStateChanged 
+} from '../firebase';
+import { 
+  doc, 
+  getDoc, 
+  setDoc, 
+  onSnapshot 
+} from 'firebase/firestore';
 import { 
   ResponsiveContainer, 
   AreaChart, 
@@ -25,12 +42,15 @@ import {
   LineChart,
   Line,
   ReferenceLine,
-  Bar
+  Bar,
+  ReferenceDot,
+  ComposedChart,
+  Cell
 } from 'recharts';
 import ReactMarkdown from 'react-markdown';
 import { MetricCard, CompactMetric, LivePrice, SpeakButton } from './Common';
 
-export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData }: { data: any[], timeframe: string, setTimeframe: (tf: string) => void, historicalData?: { [key: string]: any[] } }) => {
+export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, historicalData }: { symbol: string, data: any[], timeframe: string, setTimeframe: (tf: string) => void, historicalData?: { [key: string]: any[] } }) => {
   const [chartData, setChartData] = useState(data);
   const [showMACD, setShowMACD] = useState(false);
   const [showRSI, setShowRSI] = useState(false);
@@ -39,10 +59,160 @@ export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData 
   const [macdConfig, setMacdConfig] = useState({ fast: 12, slow: 26, signal: 9 });
   const [rsiConfig, setRsiConfig] = useState({ period: 14 });
 
+  // Drawing state
+  const [drawingMode, setDrawingMode] = useState<'none' | 'trendline' | 'annotation'>('none');
+  const [trendlines, setTrendlines] = useState<{id: string, start: {x: string, y: number}, end: {x: string, y: number}}[]>([]);
+  const [annotations, setAnnotations] = useState<{id: string, x: string, y: number, text: string}[]>([]);
+  const [tempPoint, setTempPoint] = useState<{x: string, y: number} | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  // Load drawings from localStorage and Firebase
+  useEffect(() => {
+    // 1. Initial load from localStorage
+    const storageKey = `drawings_${symbol}_${timeframe}`;
+    const saved = localStorage.getItem(storageKey);
+    if (saved) {
+      try {
+        const { trendlines: savedLines, annotations: savedNotes } = JSON.parse(saved);
+        setTrendlines(savedLines || []);
+        setAnnotations(savedNotes || []);
+      } catch (e) {
+        console.error("Failed to load drawings from localStorage", e);
+      }
+    }
+
+    // 2. Sync from Firebase if user is logged in
+    let unsubscribe: (() => void) | undefined;
+    
+    const setupFirebaseSync = async (user: any) => {
+      if (!user) return;
+      
+      const drawingId = `${user.uid}_${symbol}_${timeframe}`;
+      const docRef = doc(db, 'drawings', drawingId);
+      
+      unsubscribe = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          
+          // Only update if data is actually different to avoid infinite loops
+          const newTrendlines = data.trendlines || [];
+          const newAnnotations = data.annotations || [];
+          
+          setTrendlines(prev => {
+            if (JSON.stringify(prev) === JSON.stringify(newTrendlines)) return prev;
+            return newTrendlines;
+          });
+          
+          setAnnotations(prev => {
+            if (JSON.stringify(prev) === JSON.stringify(newAnnotations)) return prev;
+            return newAnnotations;
+          });
+          
+          // Also update localStorage to keep them in sync
+          localStorage.setItem(storageKey, JSON.stringify({ 
+            trendlines: newTrendlines, 
+            annotations: newAnnotations 
+          }));
+        }
+      });
+    };
+
+    const authUnsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setupFirebaseSync(user);
+      } else {
+        if (unsubscribe) unsubscribe();
+      }
+    });
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+      authUnsubscribe();
+    };
+  }, [symbol, timeframe]);
+
+  // Save drawings to localStorage and Firebase (debounced)
+  useEffect(() => {
+    const storageKey = `drawings_${symbol}_${timeframe}`;
+    localStorage.setItem(storageKey, JSON.stringify({ trendlines, annotations }));
+
+    const syncToFirebase = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
+
+      setIsSyncing(true);
+      try {
+        const drawingId = `${user.uid}_${symbol}_${timeframe}`;
+        const docRef = doc(db, 'drawings', drawingId);
+        await setDoc(docRef, {
+          uid: user.uid,
+          symbol,
+          timeframe,
+          trendlines,
+          annotations,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+      } catch (e) {
+        console.error("Failed to sync drawings to Firebase", e);
+      } finally {
+        setIsSyncing(false);
+      }
+    };
+
+    const timeoutId = setTimeout(syncToFirebase, 2000); // 2s debounce
+    return () => clearTimeout(timeoutId);
+  }, [trendlines, annotations, symbol, timeframe]);
+
   useEffect(() => {
     if (timeframe === '1M') setChartData(data);
     else if (historicalData && historicalData[timeframe]) setChartData(historicalData[timeframe]);
+    
+    setTempPoint(null);
   }, [timeframe, data, historicalData]);
+
+  const handleChartClick = (nextState: any) => {
+    if (!nextState || drawingMode === 'none') return;
+    
+    const { activeLabel, activePayload } = nextState;
+    if (!activeLabel || !activePayload || activePayload.length === 0) return;
+
+    const x = activeLabel;
+    const y = activePayload[0].value;
+
+    if (drawingMode === 'trendline') {
+      if (!tempPoint) {
+        setTempPoint({ x, y });
+        toast.info("Click again to set the end point of the trendline");
+      } else {
+        setTrendlines([...trendlines, { 
+          id: Math.random().toString(36).substr(2, 9), 
+          start: tempPoint, 
+          end: { x, y } 
+        }]);
+        setTempPoint(null);
+        toast.success("Trendline added");
+      }
+    } else if (drawingMode === 'annotation') {
+      const text = prompt("Enter annotation text:");
+      if (text) {
+        setAnnotations([...annotations, { 
+          id: Math.random().toString(36).substr(2, 9), 
+          x, 
+          y, 
+          text 
+        }]);
+        toast.success("Annotation added");
+      }
+    }
+  };
+
+  const removeTrendline = (id: string) => {
+    setTrendlines(trendlines.filter(t => t.id !== id));
+  };
+
+  const removeAnnotation = (id: string) => {
+    setAnnotations(annotations.filter(a => a.id !== id));
+  };
 
   const indicatorsData = useMemo(() => {
     if (!chartData || chartData.length === 0) return [];
@@ -102,6 +272,7 @@ export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData 
       macd: macdLine[i],
       signal: signalLine[i],
       histogram: histogram[i],
+      histogramColor: histogram[i] >= 0 ? '#22C55E' : '#EF4444',
       rsi: rsiValues[i]
     }));
   }, [chartData, macdConfig, rsiConfig]);
@@ -111,6 +282,55 @@ export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-4">
           <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Performance Chart</h3>
+          
+          {/* Drawing Toolbar */}
+          <div className="flex items-center gap-1 p-1 bg-foreground/5 rounded-xl border border-border">
+            <button 
+              onClick={() => { setDrawingMode('none'); setTempPoint(null); }}
+              className={cn(
+                "p-1.5 rounded-lg transition-all", 
+                drawingMode === 'none' ? "bg-background shadow-sm text-green-500" : "text-gray-500 hover:text-foreground"
+              )}
+              title="Select Mode"
+            >
+              <MousePointer2 size={14} />
+            </button>
+            <button 
+              onClick={() => setDrawingMode('trendline')}
+              className={cn(
+                "p-1.5 rounded-lg transition-all", 
+                drawingMode === 'trendline' ? "bg-background shadow-sm text-green-500" : "text-gray-500 hover:text-foreground"
+              )}
+              title="Draw Trendline"
+            >
+              <Pencil size={14} />
+            </button>
+            <button 
+              onClick={() => setDrawingMode('annotation')}
+              className={cn(
+                "p-1.5 rounded-lg transition-all", 
+                drawingMode === 'annotation' ? "bg-background shadow-sm text-green-500" : "text-gray-500 hover:text-foreground"
+              )}
+              title="Add Annotation"
+            >
+              <Type size={14} />
+            </button>
+            <div className="w-px h-3 bg-border mx-0.5" />
+            <button 
+              onClick={() => { setTrendlines([]); setAnnotations([]); setTempPoint(null); toast.info("Chart cleared"); }}
+              className="p-1.5 text-gray-400 hover:text-red-500 rounded-lg transition-all"
+              title="Clear All Drawings"
+            >
+              <Eraser size={14} />
+            </button>
+            {isSyncing && (
+              <div className="px-2 flex items-center gap-1">
+                <Loader2 size={10} className="animate-spin text-blue-500" />
+                <span className="text-[8px] font-bold text-blue-500 uppercase">Syncing</span>
+              </div>
+            )}
+          </div>
+
           <div className="flex gap-2">
             <button 
               onClick={() => setShowMACD(!showMACD)}
@@ -211,9 +431,12 @@ export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData 
       )}
 
       <div className="space-y-4">
-        <div className="h-[300px] w-full">
+        <div className="h-[300px] w-full cursor-crosshair">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={indicatorsData}>
+            <ComposedChart 
+              data={indicatorsData}
+              onClick={handleChartClick}
+            >
               <defs>
                 <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#22C55E" stopOpacity={0.3}/>
@@ -281,6 +504,61 @@ export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData 
                 fill="url(#colorPrice)" 
                 animationDuration={1500}
               />
+
+              {/* Trendlines */}
+              {trendlines.map(line => (
+                <ReferenceLine 
+                  key={line.id}
+                  segment={[
+                    { x: line.start.x, y: line.start.y },
+                    { x: line.end.x, y: line.end.y }
+                  ]}
+                  stroke="#F59E0B"
+                  strokeWidth={2}
+                  strokeDasharray="3 3"
+                  label={{ 
+                    position: 'top', 
+                    value: 'Trend', 
+                    fill: '#F59E0B', 
+                    fontSize: 8, 
+                    fontWeight: 'bold' 
+                  }}
+                />
+              ))}
+
+              {/* Annotations */}
+              {annotations.map(note => (
+                <ReferenceDot 
+                  key={note.id}
+                  x={note.x}
+                  y={note.y}
+                  r={4}
+                  fill="#3B82F6"
+                  stroke="#fff"
+                  strokeWidth={2}
+                  label={{ 
+                    position: 'top', 
+                    value: note.text, 
+                    fill: '#3B82F6', 
+                    fontSize: 10, 
+                    fontWeight: 'bold',
+                    className: "bg-card px-1 rounded"
+                  }}
+                />
+              ))}
+
+              {/* Temp point for trendline */}
+              {tempPoint && (
+                <ReferenceDot 
+                  x={tempPoint.x}
+                  y={tempPoint.y}
+                  r={4}
+                  fill="#F59E0B"
+                  stroke="#fff"
+                  strokeWidth={2}
+                />
+              )}
+
               <Brush 
                 dataKey="date" 
                 height={30} 
@@ -293,7 +571,7 @@ export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData 
                   return s.split('-')[2] || s;
                 }}
               />
-            </AreaChart>
+            </ComposedChart>
           </ResponsiveContainer>
         </div>
 
@@ -301,7 +579,7 @@ export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData 
           <div className="h-[150px] w-full">
             <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">MACD ({macdConfig.fast}, {macdConfig.slow}, {macdConfig.signal})</h4>
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={indicatorsData}>
+              <ComposedChart data={indicatorsData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" vertical={false} />
                 <XAxis dataKey="date" hide />
                 <YAxis fontSize={8} axisLine={false} tickLine={false} />
@@ -312,7 +590,7 @@ export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData 
                         <div className="bg-card border border-border p-2 rounded-lg shadow-xl">
                           {payload.map((p, i) => (
                             <div key={i} className="flex justify-between gap-4">
-                              <span className="text-[8px] font-bold uppercase" style={{ color: p.color }}>{p.name}</span>
+                              <span className="text-[8px] font-bold uppercase" style={{ color: p.color || p.payload?.histogramColor }}>{p.name}</span>
                               <span className="text-[10px] font-bold">{(p.value as number).toFixed(2)}</span>
                             </div>
                           ))}
@@ -322,10 +600,15 @@ export const StockChart = ({ data = [], timeframe, setTimeframe, historicalData 
                     return null;
                   }}
                 />
+                <ReferenceLine y={0} stroke="currentColor" className="text-border" />
+                <Bar dataKey="histogram" name="Histogram">
+                  {indicatorsData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.histogramColor} fillOpacity={0.6} />
+                  ))}
+                </Bar>
                 <Line type="monotone" dataKey="macd" name="MACD" stroke="#3B82F6" dot={false} strokeWidth={1.5} />
                 <Line type="monotone" dataKey="signal" name="Signal" stroke="#F59E0B" dot={false} strokeWidth={1.5} />
-                <Bar dataKey="histogram" name="Histogram" fill="#94A3B8" fillOpacity={0.5} />
-              </LineChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         )}
@@ -466,7 +749,7 @@ export const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, 
             )}
           </div>
 
-          {!compact && <StockChart data={stock.chartData} timeframe={timeframe} setTimeframe={setTimeframe} historicalData={stock.historicalData} />}
+          {!compact && <StockChart symbol={stock.symbol} data={stock.chartData} timeframe={timeframe} setTimeframe={setTimeframe} historicalData={stock.historicalData} />}
 
           {compact && (
             <div className="grid grid-cols-1 gap-4 mt-6 pt-6 border-t border-white/5">
@@ -538,6 +821,7 @@ export const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, 
       {activeTab === 'overview' && (
         <div className="space-y-8">
           <StockChart 
+            symbol={stock.symbol}
             data={stock.chartData} 
             timeframe={timeframe} 
             setTimeframe={setTimeframe} 
