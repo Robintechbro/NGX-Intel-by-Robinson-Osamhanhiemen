@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, lazy, Suspense } from 'react';
+import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
 import { 
   Search, 
   TrendingUp, 
@@ -45,27 +45,22 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeQuery, refreshStocks, getMarketTrends } from './services/geminiService';
-import { SearchResult, StockData, PriceAlert, MarketTrends, UserProfile } from './types';
+import { SearchResult, StockData, PriceAlert, MarketTrends, UserProfile, AppNotification } from './types';
 import { cn } from './lib/utils';
 import { Toaster, toast } from 'sonner';
 import { 
   auth, 
   db, 
   googleProvider, 
-  signInWithPopup, 
-  signOut, 
-  onAuthStateChanged, 
   User,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
   updateProfile
 } from './firebase';
-import { doc, getDoc, setDoc, updateDoc, increment, onSnapshot, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, increment, onSnapshot, collection, addDoc, serverTimestamp, query as firestoreQuery, where, orderBy, deleteDoc } from 'firebase/firestore';
 import { textToSpeech } from './services/geminiService';
 
 // --- Components ---
 import { SidebarItem, MetricCard, CompactMetric, LivePrice, SpeakButton } from './components/Common';
-import { AlertModal, CompareModal, LessonModal, AuthModal, FeedbackModal } from './components/Modals';
+import { AlertModal, CompareModal, LessonModal, FeedbackModal } from './components/Modals';
 import { VoiceAgent } from './components/VoiceAgent';
 import { TagManager } from './components/TagManager';
 
@@ -76,6 +71,7 @@ const MarketStatusView = lazy(() => import('./components/MarketStatusView').then
 const MarketOverviewView = lazy(() => import('./components/MarketOverviewView').then(m => ({ default: m.MarketOverviewView })));
 const LiveMarketBoardView = lazy(() => import('./components/LiveMarketBoardView').then(m => ({ default: m.LiveMarketBoardView })));
 const SearchResultsView = lazy(() => import('./components/SearchResultsView').then(m => ({ default: m.SearchResultsView })));
+const MarketInsightsView = lazy(() => import('./components/MarketInsightsView').then(m => ({ default: m.MarketInsightsView })));
 
 // --- Helpers ---
 
@@ -89,7 +85,14 @@ const SearchResultsView = lazy(() => import('./components/SearchResultsView').th
 // Note: UserProfile is also imported from types.ts
 
 export default function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const guestId = useMemo(() => {
+    const saved = localStorage.getItem('ngx-intel-guest-id');
+    if (saved) return saved;
+    const newId = `guest_${Math.random().toString(36).substring(2, 11)}`;
+    localStorage.setItem('ngx-intel-guest-id', newId);
+    return newId;
+  }, []);
+
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -98,13 +101,13 @@ export default function App() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [watchlist, setWatchlist] = useState<StockData[]>([]);
   const [alerts, setAlerts] = useState<PriceAlert[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [isAlertModalOpen, setIsAlertModalOpen] = useState(false);
   const [selectedStockForAlert, setSelectedStockForAlert] = useState<StockData | null>(null);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
   const [selectedStockForCompare, setSelectedStockForCompare] = useState<StockData | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<any | null>(null);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<string>(new Date().toLocaleTimeString());
@@ -125,32 +128,24 @@ export default function App() {
 
   // Persist notification settings to Firestore
   useEffect(() => {
-    if (user && userProfile) {
-      // Only update if values are actually different from what's in userProfile
+    if (userProfile) {
       if (userProfile.notificationsEnabled === notificationsEnabled && 
           userProfile.movementThreshold === movementThreshold) {
         return;
       }
 
-      const userDocRef = doc(db, 'users', user.uid);
+      const userDocRef = doc(db, 'users', guestId);
       updateDoc(userDocRef, {
         notificationsEnabled,
         movementThreshold
       }).catch(err => console.error("Failed to sync settings:", err));
     }
-  }, [notificationsEnabled, movementThreshold, user, userProfile]);
+  }, [notificationsEnabled, movementThreshold, userProfile, guestId]);
 
   const handleUpdateProfile = async (data: Partial<UserProfile>) => {
-    if (!user) return;
     try {
-      const userDocRef = doc(db, 'users', user.uid);
+      const userDocRef = doc(db, 'users', guestId);
       await updateDoc(userDocRef, data);
-      
-      // Also update Firebase Auth profile if displayName is changed
-      if (data.displayName) {
-        await updateProfile(user, { displayName: data.displayName });
-      }
-      
       toast.success("Profile updated successfully");
     } catch (error) {
       console.error("Profile update failed", error);
@@ -170,93 +165,52 @@ export default function App() {
     return (saved as 'dark' | 'light') || 'dark';
   });
 
-  // Firebase Auth Listener
+  // Firebase Auth Listener (Removed for Open App)
   useEffect(() => {
     let unsubProfile: (() => void) | undefined;
 
-    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      setUser(currentUser);
+    const setupGuestProfile = async () => {
+      // Fetch or create guest profile
+      const userDocRef = doc(db, 'users', guestId);
+      const userDoc = await getDoc(userDocRef);
       
-      // Cleanup previous profile listener if it exists
-      if (unsubProfile) {
-        unsubProfile();
-        unsubProfile = undefined;
-      }
-
-      if (currentUser) {
-        // Fetch or create user profile
-        const userDocRef = doc(db, 'users', currentUser.uid);
-        const userDoc = await getDoc(userDocRef);
-        
-        if (userDoc.exists()) {
-          setUserProfile(userDoc.data() as UserProfile);
-        } else {
-          const newProfile: UserProfile = {
-            uid: currentUser.uid,
-            email: currentUser.email || '',
-            displayName: currentUser.displayName || 'Investor',
-            isPremium: true, // Default to true for testing phase
-            searchCount: 0,
-            trendsClickCount: 0,
-            notificationsEnabled: true,
-            movementThreshold: 1.5
-          };
-          await setDoc(userDocRef, {
-            ...newProfile,
-            createdAt: new Date().toISOString()
-          });
-          setUserProfile(newProfile);
-        }
-
-        // Listen for real-time profile updates
-        unsubProfile = onSnapshot(userDocRef, (doc) => {
-          if (doc.exists()) {
-            setUserProfile(doc.data() as UserProfile);
-          }
-        });
+      if (userDoc.exists()) {
+        setUserProfile(userDoc.data() as UserProfile);
       } else {
-        setUserProfile(null);
-        setMarketTrends(null);
-        setResult(null);
+        const newProfile: UserProfile = {
+          uid: guestId,
+          email: 'guest@ngxintel.com',
+          displayName: 'Guest Investor',
+          isPremium: true,
+          searchCount: 0,
+          trendsClickCount: 0,
+          notificationsEnabled: true,
+          movementThreshold: 1.5
+        };
+        await setDoc(userDocRef, {
+          ...newProfile,
+          createdAt: new Date().toISOString()
+        });
+        setUserProfile(newProfile);
       }
+
+      // Listen for real-time profile updates
+      unsubProfile = onSnapshot(userDocRef, (doc) => {
+        if (doc.exists()) {
+          setUserProfile(doc.data() as UserProfile);
+        }
+      });
       setIsAuthLoading(false);
-    });
+    };
+
+    setupGuestProfile();
 
     return () => {
-      unsubscribe();
       if (unsubProfile) unsubProfile();
     };
-  }, []);
+  }, [guestId]);
 
-  const handleLogin = () => {
-    setIsAuthModalOpen(true);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await signOut(auth);
-      toast.success("Logged out successfully");
-    } catch (error) {
-      console.error("Logout failed", error);
-    }
-  };
-
-  const isAdmin = user?.email === 'Sasdraze@gmail.com';
-
-  const handleUpgrade = async () => {
-    if (!user) {
-      handleLogin();
-      return;
-    }
-    try {
-      const userDocRef = doc(db, 'users', user.uid);
-      await updateDoc(userDocRef, { isPremium: true });
-      toast.success("Welcome to NGX Intel Premium!");
-    } catch (error) {
-      console.error("Upgrade failed", error);
-      toast.error("Upgrade failed. Please try again.");
-    }
-  };
+  const isAdmin = false; // Admin features disabled for open app
 
   useEffect(() => {
     localStorage.setItem('ngx-intel-theme', theme);
@@ -385,66 +339,116 @@ export default function App() {
     localStorage.setItem('ngx-intel-alerts', JSON.stringify(alerts));
   }, [alerts]);
 
+  // Alerts and Notifications Listeners
+  useEffect(() => {
+    const alertsRef = collection(db, 'alerts');
+    const qAlerts = firestoreQuery(alertsRef, where('uid', '==', guestId));
+    const unsubAlerts = onSnapshot(qAlerts, (snapshot) => {
+      const newAlerts = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as PriceAlert));
+      setAlerts(newAlerts);
+    });
+
+    const notificationsRef = collection(db, 'notifications');
+    const qNotifications = firestoreQuery(notificationsRef, where('uid', '==', guestId), orderBy('createdAt', 'desc'));
+    const unsubNotifications = onSnapshot(qNotifications, (snapshot) => {
+      const newNotifications = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as AppNotification));
+      setNotifications(newNotifications);
+    });
+
+    return () => {
+      unsubAlerts();
+      unsubNotifications();
+    };
+  }, [guestId]);
+
   // Check alerts whenever watchlist or alerts change
   useEffect(() => {
-    const checkAlerts = () => {
-      let triggeredAny = false;
-      const updatedAlerts = alerts.map(alert => {
-        if (!alert.active) return alert;
+    const checkAlerts = async () => {
+      if (alerts.length === 0 || watchlist.length === 0) return;
+
+      for (const alert of alerts) {
+        if (!alert.active) continue;
         
         const stock = watchlist.find(s => s.symbol === alert.symbol);
-        if (!stock) return alert;
+        if (!stock) continue;
 
-        // Extract numeric price from string like "₦38.20"
         const currentPrice = parseFloat(stock.price.replace(/[^\d.]/g, ''));
-        if (isNaN(currentPrice)) return alert;
+        const dailyChangePercent = parseFloat(stock.changePercent.replace(/[^\d.-]/g, ''));
+        if (isNaN(currentPrice)) continue;
 
         let triggered = false;
-        if (alert.type === 'above' && currentPrice >= alert.targetPrice) triggered = true;
-        if (alert.type === 'below' && currentPrice <= alert.targetPrice) triggered = true;
+        let triggerMsg = "";
+
+        if (alert.type === 'price_above' && currentPrice >= alert.targetValue) {
+          triggered = true;
+          triggerMsg = `${stock.symbol} reached ₦${alert.targetValue} (Current: ${stock.price})`;
+        } else if (alert.type === 'price_below' && currentPrice <= alert.targetValue) {
+          triggered = true;
+          triggerMsg = `${stock.symbol} dropped to ₦${alert.targetValue} (Current: ${stock.price})`;
+        } else if (alert.type === 'gain_above' && dailyChangePercent >= alert.targetValue) {
+          triggered = true;
+          triggerMsg = `${stock.symbol} gained ${stock.changePercent}, exceeding your ${alert.targetValue}% target!`;
+        } else if (alert.type === 'loss_above' && dailyChangePercent <= -alert.targetValue) {
+          triggered = true;
+          triggerMsg = `${stock.symbol} lost ${stock.changePercent}, exceeding your -${alert.targetValue}% threshold!`;
+        } else if (alert.type.startsWith('ma_cross') && stock.historicalData?.['1M']) {
+          const prices = stock.historicalData['1M'].map(d => d.price);
+          const period = alert.params?.maPeriod || 50;
+          if (prices.length >= period) {
+            const ma = prices.slice(-period).reduce((a, b) => a + b, 0) / period;
+            if (alert.type === 'ma_cross_above' && currentPrice > ma) {
+              triggered = true;
+              triggerMsg = `${stock.symbol} crossed above its ${period}-day Moving Average!`;
+            } else if (alert.type === 'ma_cross_below' && currentPrice < ma) {
+              triggered = true;
+              triggerMsg = `${stock.symbol} crossed below its ${period}-day Moving Average!`;
+            }
+          }
+        }
 
         if (triggered) {
-          triggeredAny = true;
-          toast.success(`Price Alert: ${stock.symbol} has reached ₦${alert.targetPrice}!`, {
-            description: `Current price: ${stock.price}`,
+          // Update alert in Firestore
+          const alertDocRef = doc(db, 'alerts', alert.id);
+          await updateDoc(alertDocRef, {
+            active: false,
+            triggeredAt: new Date().toISOString()
+          });
+
+          // Create notification in Firestore
+          const notificationsRef = collection(db, 'notifications');
+          await addDoc(notificationsRef, {
+            uid: guestId,
+            title: 'Smart Alert Triggered',
+            message: triggerMsg,
+            type: 'alert',
+            read: false,
+            createdAt: new Date().toISOString(),
+            data: { symbol: stock.symbol, alertId: alert.id }
+          });
+
+          toast.success(`Alert: ${stock.symbol}`, {
+            description: triggerMsg,
             duration: 10000,
           });
-          return { ...alert, active: false };
-        }
-        return alert;
-      });
 
-      if (triggeredAny) {
-        setAlerts(updatedAlerts);
+          // If email notifications are enabled, we would trigger a cloud function here
+          if (userProfile?.emailNotificationsEnabled) {
+            console.log("Email notification would be sent to:", userProfile.email);
+          }
+        }
       }
     };
 
     checkAlerts();
-  }, [watchlist, alerts]);
+  }, [watchlist, alerts, guestId, userProfile]);
 
   useEffect(() => {
     if (activeTab === 'trends' && (!marketTrends || (marketTrends.gainers.length === 0 && marketTrends.losers.length === 0))) {
       const fetchTrends = async () => {
-        if (!user) {
-          toast.error("Please sign in to see market trends");
-          return;
-        }
-
-        if (!userProfile?.isPremium && !isAdmin && userProfile?.trendsClickCount && userProfile.trendsClickCount >= 1) {
-          toast.error("Freemium limit reached: 1 Market Trend view. Upgrade for unlimited access!");
-          return;
-        }
-
         setIsTrendsLoading(true);
         try {
           const trends = await getMarketTrends();
           setMarketTrends(trends);
-          
-          // Increment trends click count
-          if (user) {
-            const userDocRef = doc(db, 'users', user.uid);
-            await updateDoc(userDocRef, { trendsClickCount: increment(1) });
-          }
         } catch (error) {
           console.error("Failed to fetch market trends", error);
         } finally {
@@ -453,33 +457,17 @@ export default function App() {
       };
       fetchTrends();
     }
-  }, [activeTab, marketTrends, user, userProfile]);
+  }, [activeTab, marketTrends, guestId, userProfile]);
 
   const handleSearch = async (e?: React.FormEvent, customQuery?: string) => {
     if (e) e.preventDefault();
     const searchQuery = customQuery || query;
     if (!searchQuery.trim()) return;
 
-    if (!user) {
-      toast.error("Please sign up to analyze stocks");
-      return;
-    }
-
-    if (!userProfile?.isPremium && !isAdmin && userProfile?.searchCount && userProfile.searchCount >= 1) {
-      toast.error("Freemium limit reached: 1 search per account. Upgrade for unlimited access!");
-      return;
-    }
-
     setLoading(true);
     const res = await analyzeQuery(searchQuery);
     setResult(res);
     setLoading(false);
-
-    // Increment search count
-    if (user) {
-      const userDocRef = doc(db, 'users', user.uid);
-      await updateDoc(userDocRef, { searchCount: increment(1) });
-    }
     
     if (activeTab === 'explorer' && res.type === 'discovery') {
       // Stay on explorer tab if we are already there and it's a discovery result
@@ -563,21 +551,73 @@ export default function App() {
 
   const isWatched = (symbol: string) => watchlist.some(s => s.symbol === symbol);
 
-  const addAlert = (symbol: string, targetPrice: number, type: 'above' | 'below') => {
-    const newAlert: PriceAlert = {
-      id: Math.random().toString(36).substr(2, 9),
-      symbol,
-      targetPrice,
-      type,
-      active: true,
-      createdAt: new Date().toISOString(),
-    };
-    setAlerts([...alerts, newAlert]);
-    toast.success(`Alert set for ${symbol} at ₦${targetPrice}`);
+  const addAlert = async (symbol: string, targetValue: number, type: any, params?: any) => {
+    try {
+      const alertsRef = collection(db, 'alerts');
+      await addDoc(alertsRef, {
+        uid: guestId,
+        symbol,
+        targetValue,
+        type,
+        active: true,
+        createdAt: new Date().toISOString(),
+        params: params || {}
+      });
+      
+      let label = "";
+      if (type === 'price_above') label = `₦${targetValue}`;
+      else if (type === 'price_below') label = `₦${targetValue}`;
+      else if (type === 'gain_above') label = `+${targetValue}%`;
+      else if (type === 'loss_above') label = `-${targetValue}%`;
+      else if (type.startsWith('ma_cross')) label = `${params?.maPeriod} MA`;
+
+      toast.success(`Smart Alert set for ${symbol}`, {
+        description: `Trigger: ${type.replace('_', ' ')} ${label}`
+      });
+    } catch (error) {
+      console.error("Failed to add alert", error);
+      toast.error("Failed to set alert");
+    }
   };
 
-  const removeAlert = (id: string) => {
-    setAlerts(alerts.filter(a => a.id !== id));
+  const removeAlert = async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'alerts', id));
+      toast.success("Alert removed");
+    } catch (error) {
+      console.error("Failed to remove alert", error);
+      toast.error("Failed to remove alert");
+    }
+  };
+
+  const markNotificationAsRead = async (id: string) => {
+    try {
+      await updateDoc(doc(db, 'notifications', id), { read: true });
+    } catch (error) {
+      console.error("Failed to mark notification as read", error);
+    }
+  };
+
+  const markAllNotificationsAsRead = async () => {
+    if (notifications.length === 0) return;
+    try {
+      const unread = notifications.filter(n => !n.read);
+      await Promise.all(unread.map(n => updateDoc(doc(db, 'notifications', n.id), { read: true })));
+      toast.success("All notifications marked as read");
+    } catch (error) {
+      console.error("Failed to mark all as read", error);
+    }
+  };
+
+  const clearTriggeredAlerts = async () => {
+    if (alerts.length === 0) return;
+    try {
+      const triggered = alerts.filter(a => !a.active);
+      await Promise.all(triggered.map(a => deleteDoc(doc(db, 'alerts', a.id))));
+      toast.success("Triggered alerts cleared");
+    } catch (error) {
+      console.error("Failed to clear triggered alerts", error);
+    }
   };
 
   if (isAuthLoading) {
@@ -607,14 +647,10 @@ export default function App() {
           onCompare={handleCompare} 
         />
       )}
-      <AuthModal 
-        isOpen={isAuthModalOpen} 
-        onClose={() => setIsAuthModalOpen(false)} 
-      />
       <FeedbackModal 
         isOpen={isFeedbackModalOpen} 
         onClose={() => setIsFeedbackModalOpen(false)} 
-        user={user}
+        user={{ uid: guestId, email: 'guest@ngxintel.com' } as any}
       />
       <LessonModal 
         isOpen={isLessonModalOpen} 
@@ -718,38 +754,15 @@ export default function App() {
               </nav>
 
               <div className="mt-auto pt-6 border-t border-border">
-                {user ? (
-                  <div className="space-y-4">
-                    <div className="flex items-center gap-3 px-4 py-3 bg-foreground/5 rounded-xl">
-                      <div className="w-10 h-10 bg-foreground/10 rounded-full flex items-center justify-center overflow-hidden">
-                        {user.photoURL ? (
-                          <img src={user.photoURL} alt={user.displayName || ''} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                        ) : (
-                          <UserIcon size={20} className="text-gray-400" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold truncate">{user.displayName || 'Investor'}</p>
-                        <p className="text-[10px] text-gray-500 truncate">
-                          {isAdmin ? 'Admin' : (userProfile?.isPremium ? 'Premium Plan' : 'Freemium Plan')}
-                        </p>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => { handleLogout(); setIsMobileMenuOpen(false); }}
-                      className="w-full py-3 bg-foreground/5 text-gray-500 font-bold rounded-xl hover:bg-red-500/10 hover:text-red-500 transition-all flex items-center justify-center gap-2"
-                    >
-                      <LogOut size={16} /> Logout
-                    </button>
+                <div className="flex items-center gap-3 px-4 py-3 bg-foreground/5 rounded-xl">
+                  <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center text-white font-bold">
+                    G
                   </div>
-                ) : (
-                  <button 
-                    onClick={() => { setIsAuthModalOpen(true); setIsMobileMenuOpen(false); }}
-                    className="w-full py-4 bg-green-500 text-white font-bold rounded-xl hover:bg-green-600 transition-all flex items-center justify-center gap-2"
-                  >
-                    <Globe size={18} /> Sign In with Google
-                  </button>
-                )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold truncate">Guest Investor</p>
+                    <p className="text-[10px] text-gray-500 truncate">Open App Mode</p>
+                  </div>
+                </div>
               </div>
             </motion.aside>
           </>
@@ -808,6 +821,12 @@ export default function App() {
             active={activeTab === 'trends'} 
             onClick={() => setActiveTab('trends')} 
           />
+          <SidebarItem 
+            icon={Zap} 
+            label="Market Insights" 
+            active={activeTab === 'insights'} 
+            onClick={() => setActiveTab('insights')} 
+          />
           <div className="pt-4 pb-2 px-4">
             <span className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em]">Learning</span>
           </div>
@@ -826,51 +845,15 @@ export default function App() {
         </nav>
 
         <div className="mt-auto pt-4 border-t border-border">
-          {user ? (
-            <div className="space-y-4">
-              <div className="flex items-center gap-3 px-4 py-3 bg-foreground/5 rounded-xl">
-                <div className="w-10 h-10 bg-foreground/10 rounded-full flex items-center justify-center overflow-hidden">
-                  {user.photoURL ? (
-                    <img src={user.photoURL} alt={user.displayName || ''} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  ) : (
-                    <UserIcon size={20} className="text-gray-400" />
-                  )}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold truncate">{user.displayName || 'Investor'}</p>
-                  <p className="text-[10px] text-gray-500 truncate">
-                    {isAdmin ? 'Admin' : (userProfile?.isPremium ? 'Premium Plan' : 'Freemium Plan')}
-                  </p>
-                </div>
-              </div>
-              {isAdmin && (
-                <div className="px-4 py-2 bg-green-500/10 border border-green-500/20 rounded-xl mb-2">
-                  <p className="text-[10px] font-bold text-green-500 uppercase tracking-widest">Admin Access</p>
-                </div>
-              )}
-              {!userProfile?.isPremium && !isAdmin && (
-                <button 
-                  onClick={handleUpgrade}
-                  className="w-full py-3 bg-green-500 text-white font-bold rounded-xl hover:bg-green-600 transition-all flex items-center justify-center gap-2"
-                >
-                  <Zap size={16} /> Upgrade
-                </button>
-              )}
-              <button 
-                onClick={handleLogout}
-                className="w-full py-3 bg-foreground/5 text-gray-500 font-bold rounded-xl hover:bg-red-500/10 hover:text-red-500 transition-all flex items-center justify-center gap-2"
-              >
-                <LogOut size={16} /> Logout
-              </button>
+          <div className="flex items-center gap-3 px-4 py-3 bg-foreground/5 rounded-xl">
+            <div className="w-10 h-10 bg-green-500 rounded-xl flex items-center justify-center text-white font-bold">
+              G
             </div>
-          ) : (
-            <button 
-              onClick={() => setIsAuthModalOpen(true)}
-              className="w-full py-4 bg-green-500 text-white font-bold rounded-xl hover:bg-green-600 transition-all flex items-center justify-center gap-2"
-            >
-              <Globe size={18} /> Sign In with Google
-            </button>
-          )}
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold truncate">Guest Investor</p>
+              <p className="text-[10px] text-gray-500 truncate">Open App Mode</p>
+            </div>
+          </div>
         </div>
       </aside>
 
@@ -929,6 +912,51 @@ export default function App() {
           </div>
           
           <div className="hidden lg:flex items-center gap-6 ml-8">
+            <div className="relative group">
+              <button 
+                onClick={() => setActiveTab('watchlist')}
+                className="p-2 bg-foreground/5 rounded-xl hover:bg-foreground/10 transition-all border border-border text-gray-500 hover:text-foreground relative"
+              >
+                <Bell size={18} />
+                {notifications.some(n => !n.read) && (
+                  <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border-2 border-background" />
+                )}
+              </button>
+              
+              {/* Notification Dropdown (Simplified) */}
+              <div className="absolute right-0 top-full mt-2 w-80 bg-card border border-border rounded-2xl shadow-2xl opacity-0 translate-y-2 pointer-events-none group-hover:opacity-100 group-hover:translate-y-0 group-hover:pointer-events-auto transition-all z-50 p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="font-bold text-sm">Notifications</h4>
+                  <button 
+                    onClick={markAllNotificationsAsRead}
+                    className="text-[10px] font-bold text-blue-500 uppercase tracking-widest hover:underline"
+                  >
+                    Mark all read
+                  </button>
+                </div>
+                <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar">
+                  {notifications.length === 0 ? (
+                    <p className="text-center text-xs text-gray-500 py-4">No notifications yet</p>
+                  ) : (
+                    notifications.map(n => (
+                      <div 
+                        key={n.id} 
+                        onClick={() => !n.read && markNotificationAsRead(n.id)}
+                        className={cn(
+                          "p-3 rounded-xl border transition-all cursor-pointer", 
+                          n.read ? "bg-foreground/5 border-transparent" : "bg-blue-500/5 border-blue-500/20 hover:bg-blue-500/10"
+                        )}
+                      >
+                        <p className="text-xs font-bold mb-1">{n.title}</p>
+                        <p className="text-[10px] text-gray-500 leading-relaxed">{n.message}</p>
+                        <p className="text-[8px] text-gray-400 mt-2">{new Date(n.createdAt).toLocaleString()}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
             <button 
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className="p-2 bg-foreground/5 rounded-xl hover:bg-foreground/10 transition-all border border-border text-gray-500 hover:text-foreground"
@@ -946,13 +974,11 @@ export default function App() {
             </div>
             <div className="flex items-center gap-4">
               <div className="flex flex-col items-end">
-                <span className="text-xs font-medium text-foreground">{user?.displayName || (isAuthLoading ? 'Loading...' : 'Guest')}</span>
-                <span className="text-[10px] text-gray-500">
-                  {isAdmin ? 'Admin' : (userProfile?.isPremium ? 'Premium Plan' : 'Freemium Plan')}
-                </span>
+                <span className="text-xs font-medium text-foreground">Guest Investor</span>
+                <span className="text-[10px] text-gray-500">Open App Mode</span>
               </div>
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-green-400 to-blue-500 overflow-hidden border-2 border-border">
-                {user?.photoURL && <img src={user.photoURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />}
+              <div className="w-8 h-8 rounded-full bg-green-500 flex items-center justify-center text-white font-bold text-xs border-2 border-border">
+                G
               </div>
             </div>
           </div>
@@ -1109,32 +1135,11 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 className="max-w-6xl mx-auto space-y-8 pb-20"
               >
-                {!user ? (
-                  <div className="bg-card border border-border p-12 rounded-[2rem] text-center space-y-6 mt-10">
-                    <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
-                      <Lock size={40} className="text-green-500" />
-                    </div>
-                    <div className="space-y-2">
-                      <h2 className="text-3xl font-bold">Watchlist is a Premium Feature</h2>
-                      <p className="text-gray-500 max-w-md mx-auto">
-                        Sign in with your Google account to start tracking your favorite NGX stocks and receive personalized insights.
-                      </p>
-                    </div>
-                    <button 
-                      onClick={() => setIsAuthModalOpen(true)}
-                      className="px-8 py-4 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-all flex items-center gap-2 mx-auto"
-                    >
-                      <Globe size={20} />
-                      Sign In to Unlock
-                    </button>
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
+                  <div>
+                    <h2 className="text-2xl md:text-3xl font-bold">My Watchlist</h2>
+                    <p className="text-gray-500 text-sm">Track your favorite companies and their performance.</p>
                   </div>
-                ) : (
-                  <>
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
-                      <div>
-                        <h2 className="text-2xl md:text-3xl font-bold">My Watchlist</h2>
-                        <p className="text-gray-500 text-sm">Track your favorite companies and their performance.</p>
-                      </div>
                       <div className="text-left sm:text-right">
                         <div className="text-2xl font-bold">{watchlist.length}</div>
                         <div className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Companies</div>
@@ -1249,25 +1254,45 @@ export default function App() {
                     {/* Active Alerts Section */}
                     {alerts.length > 0 && (
                       <div className="mt-12 space-y-6">
-                        <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Active Price Alerts</h3>
+                        <div className="flex items-center justify-between">
+                          <h3 className="text-xs font-bold text-gray-500 uppercase tracking-widest">Smart Alerts</h3>
+                          <button 
+                            onClick={clearTriggeredAlerts}
+                            className="text-[10px] font-bold text-red-500 uppercase tracking-widest hover:underline"
+                          >
+                            Clear Triggered
+                          </button>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                           {alerts.map(alert => (
                             <div key={alert.id} className={cn(
-                              "p-4 rounded-2xl border flex items-center justify-between transition-all",
-                              alert.active ? "bg-yellow-400/5 border-yellow-400/20" : "bg-white/5 border-white/10 opacity-50"
+                              "p-4 rounded-2xl border flex items-center justify-between transition-all group",
+                              alert.active ? "bg-yellow-400/5 border-yellow-400/20" : "bg-foreground/5 border-border opacity-50"
                             )}>
-                              <div>
+                              <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2 mb-1">
                                   <span className="font-bold">{alert.symbol}</span>
-                                  <span className="text-[10px] px-1.5 py-0.5 bg-white/10 rounded uppercase">
-                                    {alert.type}
+                                  <span className={cn(
+                                    "text-[8px] px-1.5 py-0.5 rounded uppercase font-bold",
+                                    alert.active ? "bg-yellow-400/20 text-yellow-600" : "bg-foreground/10 text-gray-500"
+                                  )}>
+                                    {alert.type.replace('_', ' ')}
                                   </span>
                                 </div>
-                                <div className="text-lg font-bold">₦{alert.targetPrice}</div>
+                                <div className="text-lg font-bold truncate">
+                                  {alert.type.includes('price') ? `₦${alert.targetValue}` : 
+                                   alert.type.includes('ma') ? `${alert.params?.maPeriod} MA` :
+                                   `${alert.targetValue}%`}
+                                </div>
+                                {!alert.active && alert.triggeredAt && (
+                                  <div className="text-[8px] text-gray-500 mt-1">
+                                    Triggered: {new Date(alert.triggeredAt).toLocaleDateString()}
+                                  </div>
+                                )}
                               </div>
                               <button 
                                 onClick={() => removeAlert(alert.id)}
-                                className="p-2 hover:bg-white/10 rounded-lg text-gray-500 hover:text-red-400 transition-colors"
+                                className="p-2 hover:bg-red-500/10 rounded-lg text-gray-500 hover:text-red-500 transition-colors ml-2"
                               >
                                 <Trash2 size={14} />
                               </button>
@@ -1276,8 +1301,6 @@ export default function App() {
                         </div>
                       </div>
                     )}
-                  </>
-                )}
               </motion.div>
             )}
 
@@ -1559,6 +1582,17 @@ export default function App() {
               </motion.div>
             )}
 
+            {activeTab === 'insights' && (
+              <motion.div 
+                key="insights"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-w-6xl mx-auto space-y-8 pb-20"
+              >
+                <MarketInsightsView />
+              </motion.div>
+            )}
+
             {activeTab === 'academy' && (
               <motion.div 
                 key="academy"
@@ -1739,23 +1773,11 @@ The NGX is dominated by a few key sectors. A well-diversified portfolio should t
                     <div 
                       key={i} 
                       onClick={() => {
-                        if (!userProfile?.isPremium && i > 0) {
-                          toast.error("Upgrade to Premium to access this lesson!");
-                          return;
-                        }
                         setSelectedLesson(course);
                         setIsLessonModalOpen(true);
                       }}
-                      className={cn(
-                        "bg-card border border-border p-8 rounded-3xl transition-all group flex flex-col h-full relative",
-                        (!userProfile?.isPremium && i > 0) ? "opacity-60 cursor-not-allowed" : "hover:border-blue-500/30 cursor-pointer"
-                      )}
+                      className="bg-card border border-border p-8 rounded-3xl transition-all group flex flex-col h-full relative hover:border-blue-500/30 cursor-pointer"
                     >
-                      {!userProfile?.isPremium && i > 0 && (
-                        <div className="absolute top-4 right-4 text-gray-500">
-                          <Lock size={16} />
-                        </div>
-                      )}
                       <div className="flex justify-between items-start mb-6">
                         <div className="w-12 h-12 bg-foreground/5 rounded-2xl flex items-center justify-center text-gray-500 group-hover:text-blue-500 transition-colors">
                           {course.icon}
@@ -1771,15 +1793,9 @@ The NGX is dominated by a few key sectors. A well-diversified portfolio should t
                       <p className="text-gray-500 leading-relaxed mb-6 flex-1">{course.desc}</p>
                       
                       <button 
-                        disabled={!userProfile?.isPremium && i > 0}
-                        className={cn(
-                          "flex items-center justify-center w-full py-4 text-xs font-bold rounded-2xl transition-all gap-2",
-                          (!userProfile?.isPremium && i > 0) 
-                            ? "bg-foreground/5 text-gray-500" 
-                            : "bg-foreground/5 text-blue-500 hover:bg-blue-500 hover:text-white group-hover:bg-blue-500 group-hover:text-white"
-                        )}
+                        className="flex items-center justify-center w-full py-4 text-xs font-bold rounded-2xl transition-all gap-2 bg-foreground/5 text-blue-500 hover:bg-blue-500 hover:text-white group-hover:bg-blue-500 group-hover:text-white"
                       >
-                        {(!userProfile?.isPremium && i > 0) ? "LOCKED" : "READ FULL ARTICLE"} <ChevronRight size={14} />
+                        READ FULL ARTICLE <ChevronRight size={14} />
                       </button>
                     </div>
                   ))}
@@ -1830,21 +1846,6 @@ The NGX is dominated by a few key sectors. A well-diversified portfolio should t
                 movementThreshold={movementThreshold}
                 setMovementThreshold={setMovementThreshold}
               />
-            )}
-            {activeTab === 'profile' && !userProfile && (
-              <div className="max-w-4xl mx-auto p-20 bg-card border border-border rounded-[2.5rem] text-center">
-                <div className="w-20 h-20 bg-foreground/5 rounded-full flex items-center justify-center mx-auto mb-8">
-                  <UserIcon size={40} className="text-gray-500" />
-                </div>
-                <h2 className="text-3xl font-bold mb-4">Access Your Profile</h2>
-                <p className="text-gray-500 mb-8 max-w-md mx-auto">Log in to manage your account settings, view your subscription, and customize your notification preferences.</p>
-                <button 
-                  onClick={handleLogin}
-                  className="px-10 py-4 bg-green-500 text-white font-bold rounded-2xl hover:bg-green-600 transition-all shadow-lg shadow-green-500/20"
-                >
-                  Log In to Continue
-                </button>
-              </div>
             )}
 
             {activeTab === 'live-board' && (

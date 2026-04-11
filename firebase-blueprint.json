@@ -41,6 +41,37 @@
         "updatedAt": { "type": "string", "format": "date-time", "description": "When the drawings were last updated" }
       },
       "required": ["uid", "symbol", "timeframe", "trendlines", "annotations", "updatedAt"]
+    },
+    "Alert": {
+      "title": "Price Alert",
+      "description": "Stores user-defined stock price alerts",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user" },
+        "symbol": { "type": "string", "description": "The stock symbol" },
+        "targetValue": { "type": "number", "description": "The target price or percentage" },
+        "type": { "type": "string", "enum": ["price_above", "price_below", "gain_above", "loss_above", "ma_cross_above", "ma_cross_below"], "description": "The type of alert" },
+        "active": { "type": "boolean", "description": "Whether the alert is currently active" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the alert was created" },
+        "triggeredAt": { "type": "string", "format": "date-time", "description": "When the alert was triggered" },
+        "params": { "type": "object", "description": "Additional parameters like MA period" }
+      },
+      "required": ["uid", "symbol", "targetValue", "type", "active", "createdAt"]
+    },
+    "Notification": {
+      "title": "In-App Notification",
+      "description": "Stores notifications for the user",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "The unique ID of the user" },
+        "title": { "type": "string", "description": "The notification title" },
+        "message": { "type": "string", "description": "The notification message" },
+        "type": { "type": "string", "enum": ["alert", "system", "news"], "description": "The type of notification" },
+        "read": { "type": "boolean", "description": "Whether the notification has been read" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "When the notification was created" },
+        "data": { "type": "object", "description": "Additional metadata for the notification" }
+      },
+      "required": ["uid", "title", "message", "type", "read", "createdAt"]
     }
   },
   "firestore": {
@@ -55,6 +86,14 @@
     "/drawings/{drawingId}": {
       "schema": "Drawing",
       "description": "User chart drawings"
+    },
+    "/alerts/{alertId}": {
+      "schema": "Alert",
+      "description": "User price alerts"
+    },
+    "/notifications/{notificationId}": {
+      "schema": "Notification",
+      "description": "User in-app notifications"
     }
   }
 }

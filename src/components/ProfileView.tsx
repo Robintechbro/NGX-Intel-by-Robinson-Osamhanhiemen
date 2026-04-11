@@ -148,6 +148,25 @@ export const ProfileView = ({
           <div className="space-y-6">
             <div className="flex items-center justify-between p-6 bg-foreground/5 rounded-3xl">
               <div>
+                <p className="font-bold mb-1">Email Notifications</p>
+                <p className="text-xs text-gray-500">Receive alerts via email when triggered.</p>
+              </div>
+              <button 
+                onClick={() => onUpdateProfile({ emailNotificationsEnabled: !userProfile.emailNotificationsEnabled })}
+                className={cn(
+                  "w-14 h-8 rounded-full transition-all relative p-1",
+                  userProfile.emailNotificationsEnabled ? "bg-green-500" : "bg-gray-400"
+                )}
+              >
+                <motion.div 
+                  animate={{ x: userProfile.emailNotificationsEnabled ? 24 : 0 }}
+                  className="w-6 h-6 bg-white rounded-full shadow-sm"
+                />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between p-6 bg-foreground/5 rounded-3xl">
+              <div>
                 <p className="font-bold mb-1">Price Change Alerts</p>
                 <p className="text-xs text-gray-500">Get notified when stocks move significantly.</p>
               </div>

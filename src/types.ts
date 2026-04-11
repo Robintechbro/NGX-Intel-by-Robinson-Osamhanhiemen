@@ -46,10 +46,28 @@ export interface StockData {
 export interface PriceAlert {
   id: string;
   symbol: string;
-  targetPrice: number;
-  type: 'above' | 'below';
+  targetValue: number;
+  type: 'price_above' | 'price_below' | 'gain_above' | 'loss_above' | 'ma_cross_above' | 'ma_cross_below';
   active: boolean;
   createdAt: string;
+  triggeredAt?: string;
+  params?: {
+    maPeriod?: number;
+  };
+}
+
+export interface AppNotification {
+  id: string;
+  userId: string;
+  title: string;
+  message: string;
+  type: 'alert' | 'system' | 'news';
+  read: boolean;
+  createdAt: string;
+  data?: {
+    symbol?: string;
+    alertId?: string;
+  };
 }
 
 export interface SearchResult {
@@ -90,9 +108,27 @@ export interface UserProfile {
   searchCount: number;
   trendsClickCount: number;
   notificationsEnabled?: boolean;
+  emailNotificationsEnabled?: boolean;
   movementThreshold?: number;
   photoURL?: string;
   watchlist?: string[];
   analysesCount?: number;
   trendsCount?: number;
+}
+
+export interface TopPick {
+  symbol: string;
+  name: string;
+  price: string;
+  change: string;
+  reason: string;
+  gainPotential: string;
+  riskLevel: 'Low' | 'Medium' | 'High';
+}
+
+export interface MarketInsights {
+  period: 'daily' | 'weekly' | 'monthly';
+  topPicks: TopPick[];
+  marketSummary: string;
+  lastUpdated: string;
 }

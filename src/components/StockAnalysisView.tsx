@@ -13,12 +13,14 @@ import {
   Type,
   Eraser,
   MousePointer2,
-  Trash2
+  Trash2,
+  Calendar
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { StockData } from '../types';
 import { toast } from 'sonner';
+import { summarizeNewsArticle } from '../services/geminiService';
 import { 
   auth, 
   db, 
@@ -56,8 +58,29 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
   const [showRSI, setShowRSI] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  const [macdConfig, setMacdConfig] = useState({ fast: 12, slow: 26, signal: 9 });
-  const [rsiConfig, setRsiConfig] = useState({ period: 14 });
+  const [macdConfig, setMacdConfig] = useState(() => {
+    const saved = localStorage.getItem('macd_config');
+    return saved ? JSON.parse(saved) : { fast: 12, slow: 26, signal: 9 };
+  });
+  const [rsiConfig, setRsiConfig] = useState(() => {
+    const saved = localStorage.getItem('rsi_config');
+    return saved ? JSON.parse(saved) : { period: 14 };
+  });
+
+  // Persist indicator settings
+  useEffect(() => {
+    localStorage.setItem('macd_config', JSON.stringify(macdConfig));
+  }, [macdConfig]);
+
+  useEffect(() => {
+    localStorage.setItem('rsi_config', JSON.stringify(rsiConfig));
+  }, [rsiConfig]);
+
+  const resetIndicators = () => {
+    setMacdConfig({ fast: 12, slow: 26, signal: 9 });
+    setRsiConfig({ period: 14 });
+    toast.info("Indicator parameters reset to defaults");
+  };
 
   // Drawing state
   const [drawingMode, setDrawingMode] = useState<'none' | 'trendline' | 'annotation'>('none');
@@ -65,6 +88,26 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
   const [annotations, setAnnotations] = useState<{id: string, x: string, y: number, text: string}[]>([]);
   const [tempPoint, setTempPoint] = useState<{x: string, y: number} | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [brushIndex, setBrushIndex] = useState<{start?: number, end?: number}>({});
+
+  const handleJumpToDate = (selectedDate: string) => {
+    if (!indicatorsData || indicatorsData.length === 0) return;
+    
+    // Find index of the date or the closest date after it
+    const index = indicatorsData.findIndex(d => d.date >= selectedDate);
+    
+    if (index !== -1) {
+      // Show a window of data around the selected date
+      const windowSize = Math.min(30, indicatorsData.length);
+      const start = Math.max(0, index - Math.floor(windowSize / 2));
+      const end = Math.min(indicatorsData.length - 1, start + windowSize);
+      
+      setBrushIndex({ start, end });
+      toast.success(`Jumped to ${indicatorsData[index].date.split(' ')[0]}`);
+    } else {
+      toast.error(`No data found for or after ${selectedDate}`);
+    }
+  };
 
   // Load drawings from localStorage and Firebase
   useEffect(() => {
@@ -81,20 +124,17 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
       }
     }
 
-    // 2. Sync from Firebase if user is logged in
+    // 2. Sync from Firebase
     let unsubscribe: (() => void) | undefined;
+    const guestId = localStorage.getItem('ngx-intel-guest-id') || 'guest_default';
     
-    const setupFirebaseSync = async (user: any) => {
-      if (!user) return;
-      
-      const drawingId = `${user.uid}_${symbol}_${timeframe}`;
+    const setupFirebaseSync = async () => {
+      const drawingId = `${guestId}_${symbol}_${timeframe}`;
       const docRef = doc(db, 'drawings', drawingId);
       
       unsubscribe = onSnapshot(docRef, (docSnap) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
-          
-          // Only update if data is actually different to avoid infinite loops
           const newTrendlines = data.trendlines || [];
           const newAnnotations = data.annotations || [];
           
@@ -108,7 +148,6 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
             return newAnnotations;
           });
           
-          // Also update localStorage to keep them in sync
           localStorage.setItem(storageKey, JSON.stringify({ 
             trendlines: newTrendlines, 
             annotations: newAnnotations 
@@ -117,17 +156,10 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
       });
     };
 
-    const authUnsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setupFirebaseSync(user);
-      } else {
-        if (unsubscribe) unsubscribe();
-      }
-    });
+    setupFirebaseSync();
 
     return () => {
       if (unsubscribe) unsubscribe();
-      authUnsubscribe();
     };
   }, [symbol, timeframe]);
 
@@ -137,15 +169,13 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
     localStorage.setItem(storageKey, JSON.stringify({ trendlines, annotations }));
 
     const syncToFirebase = async () => {
-      const user = auth.currentUser;
-      if (!user) return;
-
+      const guestId = localStorage.getItem('ngx-intel-guest-id') || 'guest_default';
       setIsSyncing(true);
       try {
-        const drawingId = `${user.uid}_${symbol}_${timeframe}`;
+        const drawingId = `${guestId}_${symbol}_${timeframe}`;
         const docRef = doc(db, 'drawings', drawingId);
         await setDoc(docRef, {
-          uid: user.uid,
+          uid: guestId,
           symbol,
           timeframe,
           trendlines,
@@ -168,6 +198,7 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
     else if (historicalData && historicalData[timeframe]) setChartData(historicalData[timeframe]);
     
     setTempPoint(null);
+    setBrushIndex({});
   }, [timeframe, data, historicalData]);
 
   const handleChartClick = (nextState: any) => {
@@ -331,6 +362,16 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
             )}
           </div>
 
+          <div className="flex items-center gap-2 px-2 py-1 bg-foreground/5 rounded-xl border border-border group hover:border-blue-500/30 transition-all">
+            <Calendar size={14} className="text-gray-500 group-hover:text-blue-500 transition-colors" />
+            <input 
+              type="date" 
+              onChange={(e) => handleJumpToDate(e.target.value)}
+              className="bg-transparent border-none p-0 text-[10px] font-bold text-gray-500 uppercase focus:ring-0 cursor-pointer w-24"
+              title="Jump to specific date"
+            />
+          </div>
+
           <div className="flex gap-2">
             <button 
               onClick={() => setShowMACD(!showMACD)}
@@ -416,7 +457,15 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
             </div>
           </div>
           <div className="space-y-3">
-            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">RSI Parameters</h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">RSI Parameters</h4>
+              <button 
+                onClick={resetIndicators}
+                className="text-[8px] font-bold text-blue-500 uppercase hover:underline"
+              >
+                Reset All
+              </button>
+            </div>
             <div>
               <label className="text-[8px] text-gray-500 uppercase block mb-1">Period</label>
               <input 
@@ -565,6 +614,9 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
                 stroke="#22C55E" 
                 fill="rgba(34, 197, 94, 0.05)"
                 className="text-[10px] font-bold"
+                startIndex={brushIndex.start}
+                endIndex={brushIndex.end}
+                onChange={(indices: any) => setBrushIndex(indices)}
                 tickFormatter={(val) => {
                   const s = String(val);
                   if (timeframe === '1D') return s.split(' ')[1] || s;
@@ -576,8 +628,20 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
         </div>
 
         {showMACD && (
-          <div className="h-[150px] w-full">
-            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">MACD ({macdConfig.fast}, {macdConfig.slow}, {macdConfig.signal})</h4>
+          <div className="h-[180px] w-full bg-foreground/5 rounded-2xl border border-border p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">MACD ({macdConfig.fast}, {macdConfig.slow}, {macdConfig.signal})</h4>
+              <div className="flex gap-4">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-blue-500" />
+                  <span className="text-[8px] font-bold text-gray-500 uppercase">MACD</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-yellow-500" />
+                  <span className="text-[8px] font-bold text-gray-500 uppercase">Signal</span>
+                </div>
+              </div>
+            </div>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={indicatorsData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" vertical={false} />
@@ -587,7 +651,7 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div className="bg-card border border-border p-2 rounded-lg shadow-xl">
+                        <div className="bg-card border border-border p-2 rounded-lg shadow-xl backdrop-blur-md">
                           {payload.map((p, i) => (
                             <div key={i} className="flex justify-between gap-4">
                               <span className="text-[8px] font-bold uppercase" style={{ color: p.color || p.payload?.histogramColor }}>{p.name}</span>
@@ -603,31 +667,39 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
                 <ReferenceLine y={0} stroke="currentColor" className="text-border" />
                 <Bar dataKey="histogram" name="Histogram">
                   {indicatorsData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.histogramColor} fillOpacity={0.6} />
+                    <Cell key={`cell-${index}`} fill={entry.histogramColor} fillOpacity={0.4} />
                   ))}
                 </Bar>
-                <Line type="monotone" dataKey="macd" name="MACD" stroke="#3B82F6" dot={false} strokeWidth={1.5} />
-                <Line type="monotone" dataKey="signal" name="Signal" stroke="#F59E0B" dot={false} strokeWidth={1.5} />
+                <Line type="monotone" dataKey="macd" name="MACD" stroke="#3B82F6" dot={false} strokeWidth={2} animationDuration={1000} />
+                <Line type="monotone" dataKey="signal" name="Signal" stroke="#F59E0B" dot={false} strokeWidth={2} animationDuration={1000} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
         )}
 
         {showRSI && (
-          <div className="h-[150px] w-full">
-            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">RSI ({rsiConfig.period})</h4>
+          <div className="h-[150px] w-full bg-foreground/5 rounded-2xl border border-border p-4">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">RSI ({rsiConfig.period})</h4>
+              <div className="flex gap-4">
+                <div className="flex items-center gap-1">
+                  <div className="w-2 h-2 rounded-full bg-purple-500" />
+                  <span className="text-[8px] font-bold text-gray-500 uppercase">RSI</span>
+                </div>
+              </div>
+            </div>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={indicatorsData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="currentColor" className="text-border" vertical={false} />
                 <XAxis dataKey="date" hide />
-                <YAxis domain={[0, 100]} fontSize={8} axisLine={false} tickLine={false} ticks={[30, 70]} />
-                <ReferenceLine y={70} stroke="#EF4444" strokeDasharray="3 3" label={{ value: 'Overbought', position: 'insideRight', fontSize: 8, fill: '#EF4444' }} />
-                <ReferenceLine y={30} stroke="#22C55E" strokeDasharray="3 3" label={{ value: 'Oversold', position: 'insideRight', fontSize: 8, fill: '#22C55E' }} />
+                <YAxis domain={[0, 100]} fontSize={8} axisLine={false} tickLine={false} ticks={[0, 30, 70, 100]} />
+                <ReferenceLine y={70} stroke="#EF4444" strokeDasharray="3 3" label={{ value: 'Overbought', position: 'insideRight', fontSize: 8, fill: '#EF4444', fontWeight: 'bold' }} />
+                <ReferenceLine y={30} stroke="#22C55E" strokeDasharray="3 3" label={{ value: 'Oversold', position: 'insideRight', fontSize: 8, fill: '#22C55E', fontWeight: 'bold' }} />
                 <Tooltip 
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
-                        <div className="bg-card border border-border p-2 rounded-lg shadow-xl">
+                        <div className="bg-card border border-border p-2 rounded-lg shadow-xl backdrop-blur-md">
                           <span className="text-[8px] font-bold uppercase text-purple-500">RSI</span>
                           <span className="text-[10px] font-bold ml-2">{(payload[0].value as number).toFixed(2)}</span>
                         </div>
@@ -636,7 +708,7 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
                     return null;
                   }}
                 />
-                <Line type="monotone" dataKey="rsi" name="RSI" stroke="#A855F7" dot={false} strokeWidth={1.5} />
+                <Line type="monotone" dataKey="rsi" name="RSI" stroke="#A855F7" dot={false} strokeWidth={2} animationDuration={1000} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -649,6 +721,27 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
 export const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, onViewDetails, onCompare }: { stock: StockData, compact?: boolean, onWatch: (s: StockData) => void, isWatched: boolean, onViewDetails?: (s: StockData) => void, onCompare?: (s: StockData) => void }) => {
   const [timeframe, setTimeframe] = useState('1M');
   const [activeTab, setActiveTab] = useState('overview');
+  const [summaries, setSummaries] = useState<Record<number, string>>({});
+  const [loadingSummaries, setLoadingSummaries] = useState<Record<number, boolean>>({});
+
+  useEffect(() => {
+    setSummaries({});
+    setLoadingSummaries({});
+  }, [stock.symbol]);
+
+  const handleSummarize = async (index: number, headline: string) => {
+    if (summaries[index]) return;
+    
+    setLoadingSummaries(prev => ({ ...prev, [index]: true }));
+    try {
+      const summary = await summarizeNewsArticle(headline, stock.symbol);
+      setSummaries(prev => ({ ...prev, [index]: summary }));
+    } catch (error) {
+      toast.error("Failed to summarize article");
+    } finally {
+      setLoadingSummaries(prev => ({ ...prev, [index]: false }));
+    }
+  };
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: <Activity size={16} /> },
@@ -889,6 +982,40 @@ export const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, 
                       <h4 className="font-bold text-base mb-3 group-hover:text-blue-500 transition-colors leading-snug">
                         {item.headline}
                       </h4>
+                      
+                      {summaries[i] ? (
+                        <motion.div 
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: 'auto' }}
+                          className="mb-4 p-3 bg-blue-500/5 border-l-2 border-blue-500 rounded-r-lg text-xs text-gray-400 italic leading-relaxed"
+                        >
+                          <span className="font-bold text-blue-500 not-italic mr-1">AI Summary:</span>
+                          {summaries[i]}
+                        </motion.div>
+                      ) : (
+                        <button 
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSummarize(i, item.headline);
+                          }}
+                          disabled={loadingSummaries[i]}
+                          className="mb-4 flex items-center gap-2 text-[10px] font-bold text-blue-500 uppercase tracking-widest bg-blue-500/5 hover:bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 group/sum"
+                        >
+                          {loadingSummaries[i] ? (
+                            <>
+                              <Loader2 size={12} className="animate-spin" />
+                              Generating Summary...
+                            </>
+                          ) : (
+                            <>
+                              <Zap size={12} className="group-hover/sum:fill-blue-500 transition-all" />
+                              Summarize with AI
+                            </>
+                          )}
+                        </button>
+                      )}
+
                       <div className="flex items-center gap-2 text-xs text-blue-500 font-bold opacity-0 group-hover:opacity-100 transition-all">
                         Read Full Article <ArrowRight size={14} />
                       </div>

@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality } from "@google/genai";
-import { StockData, SearchResult, MarketTrends, MarketOverview } from "../types";
+import { StockData, SearchResult, MarketTrends, MarketOverview, MarketInsights } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
@@ -274,5 +274,84 @@ export async function getLiveMarketBoard(): Promise<StockData[]> {
   } catch (error) {
     console.error("Gemini Live Board Error:", error);
     return [];
+  }
+}
+
+export async function summarizeNewsArticle(headline: string, symbol: string): Promise<string> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-1.5-flash",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Provide a very brief (max 2 sentences), beginner-friendly summary of this news headline for ${symbol}: "${headline}". 
+          Explain why this news might matter to an investor. 
+          If the headline is self-explanatory, just provide a quick insight.` }]
+        }
+      ],
+      config: {
+        responseMimeType: "text/plain",
+      },
+    });
+
+    return response.text || "No summary available.";
+  } catch (error) {
+    console.error("Gemini Summarization Error:", error);
+    return "Could not generate summary.";
+  }
+}
+
+export async function getMarketInsights(period: 'daily' | 'weekly' | 'monthly'): Promise<MarketInsights> {
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents: [
+        {
+          role: "user",
+          parts: [{ text: `Current Date: ${new Date().toISOString()}.
+          Generate a ${period} Market Insights report for the Nigerian Stock Market (NGX).
+          
+          DATA FETCHING (CRITICAL):
+          You MUST use the Google Search tool to fetch the LATEST real-time data.
+          Look for the top 5 stocks that are currently considered the best investments for the ${period} period.
+          
+          JSON STRUCTURE:
+          Return strictly valid JSON:
+          {
+            "period": "${period}",
+            "marketSummary": "A detailed, beginner-friendly summary of the market's performance and why these picks were chosen. Use Markdown.",
+            "topPicks": [
+              {
+                "symbol": "...",
+                "name": "...",
+                "price": "₦...",
+                "change": "...%",
+                "reason": "A detailed explanation of why this stock is a top pick for this period.",
+                "gainPotential": "...%",
+                "riskLevel": "Low" | "Medium" | "High"
+              }
+            ],
+            "lastUpdated": "..."
+          }
+          
+          Ensure 'lastUpdated' is a human-readable timestamp.` }]
+        }
+      ],
+      config: {
+        tools: [{ googleSearch: {} }],
+        responseMimeType: "application/json",
+      },
+    });
+
+    const result = JSON.parse(response.text || "{}");
+    return result as MarketInsights;
+  } catch (error) {
+    console.error("Gemini Market Insights Error:", error);
+    return {
+      period,
+      marketSummary: "Error fetching market insights.",
+      topPicks: [],
+      lastUpdated: new Date().toISOString()
+    };
   }
 }
