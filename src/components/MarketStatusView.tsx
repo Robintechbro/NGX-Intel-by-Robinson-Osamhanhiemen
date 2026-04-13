@@ -52,12 +52,12 @@ export const MarketStatusView = () => {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Top Gainers */}
         <motion.div 
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="bg-card border border-border rounded-[2.5rem] overflow-hidden"
+          className="bg-card border border-border rounded-[2.5rem] overflow-hidden lg:col-span-1"
         >
           <div className="p-8 border-b border-border bg-green-500/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -66,7 +66,6 @@ export const MarketStatusView = () => {
               </div>
               <h3 className="text-xl font-bold">Top Gainers</h3>
             </div>
-            <span className="text-xs font-bold text-green-500 uppercase tracking-widest">Bullish Momentum</span>
           </div>
           <div className="divide-y divide-border">
             {trends?.gainers.map((stock, i) => (
@@ -93,7 +92,7 @@ export const MarketStatusView = () => {
         <motion.div 
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          className="bg-card border border-border rounded-[2.5rem] overflow-hidden"
+          className="bg-card border border-border rounded-[2.5rem] overflow-hidden lg:col-span-1"
         >
           <div className="p-8 border-b border-border bg-red-500/5 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -102,7 +101,6 @@ export const MarketStatusView = () => {
               </div>
               <h3 className="text-xl font-bold">Top Losers</h3>
             </div>
-            <span className="text-xs font-bold text-red-500 uppercase tracking-widest">Bearish Pressure</span>
           </div>
           <div className="divide-y divide-border">
             {trends?.losers.map((stock, i) => (
@@ -122,6 +120,51 @@ export const MarketStatusView = () => {
                 </div>
               </div>
             ))}
+          </div>
+        </motion.div>
+
+        {/* Live Activity Feed */}
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-card border border-border rounded-[2.5rem] overflow-hidden lg:col-span-1"
+        >
+          <div className="p-8 border-b border-border bg-blue-500/5 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-500 rounded-xl">
+                <Activity size={20} className="text-white" />
+              </div>
+              <h3 className="text-xl font-bold">Live Activity</h3>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping" />
+              <span className="text-[10px] font-black text-blue-500 uppercase tracking-widest">Real-time</span>
+            </div>
+          </div>
+          <div className="p-6 space-y-6 max-h-[500px] overflow-y-auto custom-scrollbar">
+            {([...(trends?.gainers || []), ...(trends?.losers || [])].sort(() => Math.random() - 0.5).map((item, i) => (
+              <div key={i} className="flex items-start gap-4 relative">
+                {i < 7 && <div className="absolute left-2 top-8 bottom-0 w-px bg-border" />}
+                <div className={cn(
+                  "w-4 h-4 rounded-full mt-1 shrink-0 z-10",
+                  item.change.startsWith('+') ? "bg-green-500" : "bg-red-500"
+                )} />
+                <div className="space-y-1">
+                  <p className="text-xs font-bold">
+                    <span className="text-foreground">{item.symbol}</span>
+                    <span className="text-gray-500 font-medium ml-2">price updated to</span>
+                    <span className="text-foreground ml-2">{item.price}</span>
+                  </p>
+                  <p className={cn(
+                    "text-[10px] font-black uppercase tracking-widest",
+                    item.change.startsWith('+') ? "text-green-500" : "text-red-500"
+                  )}>
+                    {item.change.startsWith('+') ? 'Price Surge' : 'Price Dip'} • {item.change}
+                  </p>
+                  <p className="text-[8px] text-gray-500 uppercase font-bold">{i === 0 ? 'Just now' : `${i * 2}m ago`}</p>
+                </div>
+              </div>
+            )))}
           </div>
         </motion.div>
       </div>

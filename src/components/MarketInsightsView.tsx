@@ -249,74 +249,130 @@ export const MarketInsightsView = () => {
       )}
 
       {/* Weekly Spotlight Section */}
-      <div className="space-y-6 pt-12 border-t border-border">
-        <div className="flex items-center justify-between px-2">
-          <h2 className="text-2xl font-bold flex items-center gap-2">
-            <Calendar size={24} className="text-blue-500" />
-            Weekly Spotlight
-          </h2>
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-widest bg-foreground/5 px-3 py-1 rounded-full border border-border">
-            Top 5 Weekly Picks
-          </span>
+      <div className="space-y-8 pt-12 border-t border-border">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-2">
+          <div>
+            <h2 className="text-3xl font-bold flex items-center gap-3">
+              <Calendar size={32} className="text-blue-500" />
+              Top 5 Weekly Stock Picks
+            </h2>
+            <p className="text-gray-500 mt-1">Expert AI assessment of the best opportunities for the coming week.</p>
+          </div>
+          <div className="flex items-center gap-2 text-xs font-bold text-blue-500 bg-blue-500/10 px-4 py-2 rounded-xl border border-blue-500/20 uppercase tracking-widest">
+            <Zap size={14} />
+            Updated Weekly
+          </div>
         </div>
 
         {loadingWeekly && weeklyPicks.length === 0 ? (
-          <div className="flex items-center justify-center py-12 bg-foreground/5 rounded-3xl border border-dashed border-border">
-            <Loader2 size={24} className="animate-spin text-blue-500 opacity-20" />
+          <div className="flex flex-col items-center justify-center py-20 bg-foreground/5 rounded-[2.5rem] border border-dashed border-border">
+            <Loader2 size={32} className="animate-spin text-blue-500 mb-4" />
+            <p className="text-gray-500 font-medium">Generating weekly spotlight...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
             {weeklyPicks.map((pick, i) => (
               <motion.div
                 key={pick.symbol}
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
                 transition={{ delay: i * 0.1 }}
-                className="bg-card border border-border p-5 rounded-2xl hover:border-blue-500/30 transition-all group relative overflow-hidden"
+                className="bg-card border border-border p-6 rounded-[2rem] hover:border-blue-500/40 hover:shadow-2xl hover:shadow-blue-500/10 transition-all group relative flex flex-col h-full"
               >
-                <div className="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-20 transition-opacity">
-                  <TrendingUp size={40} className="text-blue-500" />
+                <div className="absolute -top-12 -right-12 p-8 opacity-5 group-hover:opacity-10 transition-opacity">
+                  <TrendingUp size={120} className="text-blue-500" />
                 </div>
                 
-                <div className="relative z-10">
-                  <div className="flex items-center gap-2 mb-3">
-                    <div className="w-8 h-8 bg-blue-500/10 text-blue-500 rounded-lg flex items-center justify-center font-bold text-xs">
+                <div className="relative z-10 flex flex-col h-full">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="w-12 h-12 bg-blue-500/10 text-blue-500 rounded-2xl flex items-center justify-center font-black text-lg shadow-inner">
                       {pick.symbol}
                     </div>
                     <div className={cn(
-                      "px-2 py-0.5 rounded text-[8px] font-bold uppercase tracking-widest",
+                      "px-3 py-1 rounded-full border text-[10px] font-black uppercase tracking-tighter flex items-center gap-1",
                       riskColors[pick.riskLevel]
                     )}>
+                      {riskIcons[pick.riskLevel]}
                       {pick.riskLevel}
                     </div>
                   </div>
                   
-                  <h3 className="font-bold text-sm mb-1 truncate">{pick.name}</h3>
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-xs font-bold">{pick.price}</span>
-                    <span className={cn(
-                      "text-[10px] font-bold",
-                      pick.change.startsWith('+') ? "text-green-500" : "text-red-500"
-                    )}>
-                      {pick.change}
-                    </span>
+                  <div className="mb-4">
+                    <h3 className="font-bold text-base leading-tight group-hover:text-blue-500 transition-colors line-clamp-1">{pick.name}</h3>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-sm font-black text-foreground">{pick.price}</span>
+                      <span className={cn(
+                        "text-xs font-bold flex items-center",
+                        pick.change.startsWith('+') ? "text-green-500" : "text-red-500"
+                      )}>
+                        {pick.change.startsWith('+') ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                        {pick.change}
+                      </span>
+                    </div>
                   </div>
                   
-                  <div className="space-y-2">
-                    <div className="flex flex-col">
-                      <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest">Potential</span>
-                      <span className="text-xs font-bold text-green-500">{pick.gainPotential}</span>
+                  <div className="flex-1 space-y-4">
+                    <div className="p-3 bg-foreground/5 rounded-2xl border border-border/50">
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">Est. Gain Potential</span>
+                      <span className="text-xl font-black text-green-500">{pick.gainPotential}</span>
                     </div>
-                    <p className="text-[10px] text-gray-500 line-clamp-2 italic">
-                      {pick.reason}
-                    </p>
+                    
+                    <div>
+                      <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Reason for Selection</span>
+                      <p className="text-xs text-gray-400 leading-relaxed line-clamp-4 italic">
+                        "{pick.reason}"
+                      </p>
+                    </div>
                   </div>
+
+                  <button className="mt-6 w-full py-3 bg-foreground/5 hover:bg-blue-500 hover:text-white rounded-xl text-xs font-bold transition-all border border-border group-hover:border-blue-500/50">
+                    View Analysis
+                  </button>
                 </div>
               </motion.div>
             ))}
           </div>
         )}
       </div>
+
+      {period === 'monthly' && insights && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-gradient-to-br from-indigo-600 to-violet-700 p-10 rounded-[3rem] text-white shadow-2xl shadow-indigo-500/20 overflow-hidden relative"
+        >
+          <div className="absolute top-0 right-0 p-12 opacity-10">
+            <Shield size={200} />
+          </div>
+          
+          <div className="relative z-10 max-w-3xl">
+            <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full border border-white/20 text-xs font-bold uppercase tracking-widest mb-6">
+              <Zap size={14} />
+              Monthly Assessment
+            </div>
+            <h2 className="text-4xl font-black mb-6">Strategic Monthly Outlook</h2>
+            <div className="prose prose-invert max-w-none text-white/80 leading-relaxed text-lg">
+              <ReactMarkdown>{insights.marketSummary}</ReactMarkdown>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-10">
+              {[
+                { label: "Market Sentiment", value: "Bullish", color: "bg-green-400" },
+                { label: "Top Sector", value: "Banking", color: "bg-blue-400" },
+                { label: "Risk Level", value: "Moderate", color: "bg-yellow-400" }
+              ].map((item, i) => (
+                <div key={i} className="bg-white/5 border border-white/10 p-4 rounded-2xl">
+                  <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest block mb-1">{item.label}</span>
+                  <div className="flex items-center gap-2">
+                    <div className={cn("w-2 h-2 rounded-full", item.color)} />
+                    <span className="font-bold">{item.value}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+      )}
     </div>
   );
 };

@@ -8,7 +8,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, parsePrice } from '../lib/utils';
 import { textToSpeech } from '../services/geminiService';
 import { toast } from 'sonner';
 
@@ -82,8 +82,8 @@ export const LivePrice = ({ value, change, changePercent, size = "large" }: { va
 
   useEffect(() => {
     if (value !== prevValue) {
-      const oldNum = parseFloat(prevValue.replace(/[^\d.]/g, ''));
-      const newNum = parseFloat(value.replace(/[^\d.]/g, ''));
+      const oldNum = parsePrice(prevValue);
+      const newNum = parsePrice(value);
       
       if (!isNaN(oldNum) && !isNaN(newNum)) {
         setFlash(newNum > oldNum ? "up" : "down");
@@ -106,9 +106,9 @@ export const LivePrice = ({ value, change, changePercent, size = "large" }: { va
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -5 }}
           className={cn(
-            "font-bold transition-colors duration-500",
+            "font-bold transition-all duration-500 rounded-lg px-2 -mx-2",
             size === "large" ? "text-2xl" : "text-lg",
-            flash === "up" ? "text-green-500" : flash === "down" ? "text-red-500" : "text-foreground"
+            flash === "up" ? "bg-green-500/20 text-green-500 scale-105" : flash === "down" ? "bg-red-500/20 text-red-500 scale-105" : "text-foreground"
           )}
         >
           {value}

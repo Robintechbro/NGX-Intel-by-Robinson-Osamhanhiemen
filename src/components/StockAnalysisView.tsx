@@ -14,7 +14,8 @@ import {
   Eraser,
   MousePointer2,
   Trash2,
-  Calendar
+  Calendar,
+  Sparkles
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -985,12 +986,18 @@ export const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, 
                       
                       {summaries[i] ? (
                         <motion.div 
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: 'auto' }}
-                          className="mb-4 p-3 bg-blue-500/5 border-l-2 border-blue-500 rounded-r-lg text-xs text-gray-400 italic leading-relaxed"
+                          initial={{ opacity: 0, y: -10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className="mb-4 p-4 bg-blue-500/5 border border-blue-500/20 rounded-2xl text-xs text-gray-400 leading-relaxed relative overflow-hidden group/summary"
                         >
-                          <span className="font-bold text-blue-500 not-italic mr-1">AI Summary:</span>
-                          {summaries[i]}
+                          <div className="absolute top-0 left-0 w-1 h-full bg-blue-500" />
+                          <div className="flex items-start gap-2">
+                            <Sparkles size={14} className="text-blue-500 shrink-0 mt-0.5" />
+                            <div>
+                              <span className="font-bold text-blue-500 uppercase tracking-widest text-[9px] block mb-1">AI Insights</span>
+                              {summaries[i]}
+                            </div>
+                          </div>
                         </motion.div>
                       ) : (
                         <button 
@@ -1000,16 +1007,16 @@ export const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, 
                             handleSummarize(i, item.headline);
                           }}
                           disabled={loadingSummaries[i]}
-                          className="mb-4 flex items-center gap-2 text-[10px] font-bold text-blue-500 uppercase tracking-widest bg-blue-500/5 hover:bg-blue-500/10 border border-blue-500/20 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50 group/sum"
+                          className="mb-4 flex items-center gap-2 text-[10px] font-bold text-blue-500 uppercase tracking-widest bg-blue-500/10 hover:bg-blue-500/20 border border-blue-500/30 px-4 py-2 rounded-xl transition-all disabled:opacity-50 group/sum shadow-sm shadow-blue-500/5"
                         >
                           {loadingSummaries[i] ? (
                             <>
                               <Loader2 size={12} className="animate-spin" />
-                              Generating Summary...
+                              Analyzing Article...
                             </>
                           ) : (
                             <>
-                              <Zap size={12} className="group-hover/sum:fill-blue-500 transition-all" />
+                              <Sparkles size={12} className="group-hover/sum:scale-110 transition-transform" />
                               Summarize with AI
                             </>
                           )}

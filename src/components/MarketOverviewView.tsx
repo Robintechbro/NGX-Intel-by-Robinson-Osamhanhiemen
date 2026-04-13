@@ -9,7 +9,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { motion } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, parsePercent } from '../lib/utils';
 import { MarketOverview } from '../types';
 import { getMarketOverview } from '../services/geminiService';
 import { 
@@ -123,7 +123,7 @@ export const MarketOverviewView = ({ onSectorClick, onStockClick }: { onSectorCl
                 layout="vertical"
                 data={overview?.sectors.map(s => ({
                   name: s.name,
-                  value: parseFloat(s.changePercent.replace('%', '').replace('+', ''))
+                  value: parsePercent(s.changePercent)
                 })).sort((a, b) => b.value - a.value)}
                 margin={{ top: 5, right: 30, left: 40, bottom: 5 }}
               >
@@ -158,7 +158,7 @@ export const MarketOverviewView = ({ onSectorClick, onStockClick }: { onSectorCl
                   {overview?.sectors.map((entry, index) => (
                     <Cell 
                       key={`cell-${index}`} 
-                      fill={parseFloat(entry.changePercent.replace('%', '').replace('+', '')) >= 0 ? '#22C55E' : '#EF4444'} 
+                      fill={parsePercent(entry.changePercent) >= 0 ? '#22C55E' : '#EF4444'} 
                     />
                   ))}
                 </Bar>

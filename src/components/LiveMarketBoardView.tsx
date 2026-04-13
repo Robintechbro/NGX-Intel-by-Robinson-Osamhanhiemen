@@ -6,7 +6,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { cn } from '../lib/utils';
+import { cn, parsePercent } from '../lib/utils';
 import { StockData } from '../types';
 import { getLiveMarketBoard } from '../services/geminiService';
 import { MiniSparkline } from './Charts';
@@ -33,8 +33,8 @@ export const LiveMarketBoardView = ({ onSelectStock }: { onSelectStock: (stock: 
 
   const sortedStocks = useMemo(() => {
     return [...stocks].sort((a, b) => {
-      const aChange = parseFloat(a.changePercent.replace(/[^\d.-]/g, '')) || 0;
-      const bChange = parseFloat(b.changePercent.replace(/[^\d.-]/g, '')) || 0;
+      const aChange = parsePercent(a.changePercent);
+      const bChange = parsePercent(b.changePercent);
       return bChange - aChange;
     });
   }, [stocks]);
@@ -56,8 +56,11 @@ export const LiveMarketBoardView = ({ onSelectStock }: { onSelectStock: (stock: 
           <p className="text-gray-500 text-sm">Real-time performance of all major NGX listed companies. Stocks are automatically ranked by daily performance.</p>
         </div>
         <div className="flex items-center gap-3 px-4 py-2 bg-foreground/5 rounded-2xl border border-border">
-          <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Live Updates • {lastUpdated}</span>
+          <div className="flex items-center gap-2 mr-2 pr-2 border-r border-border">
+            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-green-500">Live Pulse</span>
+          </div>
+          <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500">Updates every 60s • {lastUpdated}</span>
         </div>
       </div>
 

@@ -46,7 +46,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { analyzeQuery, refreshStocks, getMarketTrends } from './services/geminiService';
 import { SearchResult, StockData, PriceAlert, MarketTrends, UserProfile, AppNotification } from './types';
-import { cn } from './lib/utils';
+import { cn, parsePrice, parsePercent } from './lib/utils';
 import { Toaster, toast } from 'sonner';
 import { 
   auth, 
@@ -60,6 +60,7 @@ import { textToSpeech } from './services/geminiService';
 
 // --- Components ---
 import { SidebarItem, MetricCard, CompactMetric, LivePrice, SpeakButton } from './components/Common';
+import { MarketTicker } from './components/MarketTicker';
 import { AlertModal, CompareModal, LessonModal, FeedbackModal } from './components/Modals';
 import { VoiceAgent } from './components/VoiceAgent';
 import { TagManager } from './components/TagManager';
@@ -268,8 +269,8 @@ export default function App() {
           setWatchlist(prev => prev.map(stock => {
             const updated = updatedStocks.find(u => u.symbol === stock.symbol);
             if (updated) {
-              const oldPrice = parseFloat(stock.price.replace(/[^\d.]/g, ''));
-              const newPrice = parseFloat(updated.price.replace(/[^\d.]/g, ''));
+              const oldPrice = parsePrice(stock.price);
+              const newPrice = parsePrice(updated.price);
               
               if (!isNaN(oldPrice) && !isNaN(newPrice) && oldPrice > 0 && notificationsEnabled) {
                 const movement = ((newPrice - oldPrice) / oldPrice) * 100;
@@ -372,8 +373,8 @@ export default function App() {
         const stock = watchlist.find(s => s.symbol === alert.symbol);
         if (!stock) continue;
 
-        const currentPrice = parseFloat(stock.price.replace(/[^\d.]/g, ''));
-        const dailyChangePercent = parseFloat(stock.changePercent.replace(/[^\d.-]/g, ''));
+        const currentPrice = parsePrice(stock.price);
+        const dailyChangePercent = parsePercent(stock.changePercent);
         if (isNaN(currentPrice)) continue;
 
         let triggered = false;
@@ -983,6 +984,7 @@ export default function App() {
             </div>
           </div>
         </header>
+        <MarketTicker />
 
         {/* Scrollable Area */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
