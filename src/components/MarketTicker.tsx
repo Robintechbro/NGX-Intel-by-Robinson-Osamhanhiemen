@@ -14,7 +14,7 @@ export const MarketTicker = () => {
       setTrends(data);
     };
     fetchTrends();
-    const interval = setInterval(fetchTrends, 60000); // Refresh every minute
+    const interval = setInterval(fetchTrends, 30000); // Refresh every 30 seconds
     return () => clearInterval(interval);
   }, []);
 

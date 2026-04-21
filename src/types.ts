@@ -1,3 +1,13 @@
+export type InvestorStyle = 'dividend_hunter' | 'growth_seeker' | 'capital_preserver' | 'value_investor';
+export type RiskAppetite = 'conservative' | 'moderate' | 'aggressive';
+
+export interface InvestorProfile {
+  style: InvestorStyle;
+  riskAppetite: RiskAppetite;
+  sectors: string[];
+  minMarketCap?: string;
+}
+
 export interface StockData {
   symbol: string;
   name: string;
@@ -13,6 +23,8 @@ export interface StockData {
   description: string;
   aiSummary: string;
   investmentScore: number;
+  alphaMatch?: number; // Personalized score
+  alphaReasoning?: string; // Why it matches the user
   rating: string;
   scoreReasoning: string[];
   metrics: {
@@ -114,6 +126,7 @@ export interface UserProfile {
   watchlist?: string[];
   analysesCount?: number;
   trendsCount?: number;
+  investorProfile?: InvestorProfile;
 }
 
 export interface TopPick {

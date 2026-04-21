@@ -1,5 +1,5 @@
 import { GoogleGenAI, Modality } from "@google/genai";
-import { StockData, SearchResult, MarketTrends, MarketOverview, MarketInsights } from "../types";
+import { StockData, SearchResult, MarketTrends, MarketOverview, MarketInsights, InvestorProfile } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || "" });
 
@@ -127,8 +127,19 @@ export async function getMarketTrends(): Promise<MarketTrends> {
   }
 }
 
-export async function analyzeQuery(query: string): Promise<SearchResult> {
+export async function analyzeQuery(query: string, profile?: InvestorProfile): Promise<SearchResult> {
   try {
+    const profileContext = profile ? `
+      INVESTOR PROFILE (PERSONALIZATION):
+      The user is a ${profile.style.replace('_', ' ')} with a ${profile.riskAppetite} risk appetite.
+      Preferred Sectors: ${profile.sectors.join(', ')}.
+      
+      PERSONALIZATION INSTRUCTIONS:
+      1. Calculate an 'alphaMatch' score (0-100) specifically for this user based on their profile.
+      2. Provide 'alphaReasoning' (1-2 sentences) explaining why this stock fits or doesn't fit their specific goals.
+      3. Tailor the 'aiSummary' markdown to address their concerns (e.g., if they are a dividend hunter, focus more on yield and payout history).
+    ` : "";
+
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [
@@ -136,6 +147,7 @@ export async function analyzeQuery(query: string): Promise<SearchResult> {
           role: "user",
           parts: [{ text: `Current Date: ${new Date().toISOString()}.
           Analyze the following query about the Nigerian Stock Market (NGX): "${query}". 
+          ${profileContext}
           
           INTENT DETECTION:
           - If the user mentions two or more companies (e.g., "GTCO vs Zenith"), set type to 'comparison'.
@@ -301,8 +313,14 @@ export async function summarizeNewsArticle(headline: string, symbol: string): Pr
   }
 }
 
-export async function getMarketInsights(period: 'daily' | 'weekly' | 'monthly'): Promise<MarketInsights> {
+export async function getMarketInsights(period: 'daily' | 'weekly' | 'monthly', profile?: InvestorProfile): Promise<MarketInsights> {
   try {
+    const profileContext = profile ? `
+      INVESTOR PROFILE (PERSONALIZATION):
+      Style: ${profile.style.replace('_', ' ')}. Risk: ${profile.riskAppetite}.
+      Tailor the "marketSummary" and "topPicks" to prioritize companies matching this profile.
+    ` : "";
+
     const response = await ai.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [
@@ -310,6 +328,7 @@ export async function getMarketInsights(period: 'daily' | 'weekly' | 'monthly'):
           role: "user",
           parts: [{ text: `Current Date: ${new Date().toISOString()}.
           Generate a ${period} Market Insights report for the Nigerian Stock Market (NGX).
+          ${profileContext}
           
           DATA FETCHING (CRITICAL):
           You MUST use the Google Search tool to fetch the LATEST real-time data.

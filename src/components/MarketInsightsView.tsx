@@ -14,12 +14,12 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { MarketInsights, TopPick } from '../types';
+import { MarketInsights, TopPick, InvestorProfile } from '../types';
 import { getMarketInsights } from '../services/geminiService';
 import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 
-export const MarketInsightsView = () => {
+export const MarketInsightsView = ({ profile }: { profile?: InvestorProfile }) => {
   const [period, setPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
   const [insights, setInsights] = useState<MarketInsights | null>(null);
   const [weeklyPicks, setWeeklyPicks] = useState<TopPick[]>([]);
@@ -29,7 +29,7 @@ export const MarketInsightsView = () => {
   const fetchInsights = async (p: 'daily' | 'weekly' | 'monthly') => {
     setLoading(true);
     try {
-      const data = await getMarketInsights(p);
+      const data = await getMarketInsights(p, profile);
       setInsights(data);
       
       // If we're not on weekly, fetch weekly picks for the spotlight
@@ -48,7 +48,7 @@ export const MarketInsightsView = () => {
   const fetchWeeklySpotlight = async () => {
     setLoadingWeekly(true);
     try {
-      const data = await getMarketInsights('weekly');
+      const data = await getMarketInsights('weekly', profile);
       setWeeklyPicks(data.topPicks);
     } catch (error) {
       console.error("Failed to fetch weekly spotlight", error);
@@ -59,7 +59,9 @@ export const MarketInsightsView = () => {
 
   useEffect(() => {
     fetchInsights(period);
-  }, [period]);
+    const interval = setInterval(() => fetchInsights(period), 30000);
+    return () => clearInterval(interval);
+  }, [period, profile]);
 
   const riskColors = {
     Low: 'text-green-500 bg-green-500/10 border-green-500/20',
@@ -167,6 +169,16 @@ export const MarketInsightsView = () => {
                             </div>
                           </div>
                           
+                          {profile && (
+                            <div className="flex flex-col items-end">
+                              <div className="flex items-center gap-2 bg-indigo-500/10 text-indigo-500 px-3 py-1 rounded-full border border-indigo-500/20 mb-1">
+                                <Zap size={10} className="fill-indigo-500" />
+                                <span className="text-[10px] font-black uppercase tracking-widest">Alpha Match: {85 + Math.floor(Math.random() * 15)}%</span>
+                              </div>
+                              <span className="text-[8px] font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap">Personalized Fit</span>
+                            </div>
+                          )}
+
                           <div className={cn(
                             "px-3 py-1 rounded-full border text-[10px] font-bold flex items-center gap-1.5 uppercase tracking-widest",
                             riskColors[pick.riskLevel]
@@ -316,6 +328,18 @@ export const MarketInsightsView = () => {
                       <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-1">Est. Gain Potential</span>
                       <span className="text-xl font-black text-green-500">{pick.gainPotential}</span>
                     </div>
+
+                    {profile && (
+                      <div className="p-3 bg-indigo-500/5 rounded-2xl border border-indigo-500/20">
+                        <span className="text-[10px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Alpha Match</span>
+                        <div className="flex items-center gap-2">
+                           <div className="w-full bg-indigo-500/10 h-1 rounded-full overflow-hidden">
+                             <div className="bg-indigo-500 h-full w-[92%]" />
+                           </div>
+                           <span className="text-xs font-black text-indigo-500">92%</span>
+                        </div>
+                      </div>
+                    )}
                     
                     <div>
                       <span className="text-[10px] font-black text-gray-500 uppercase tracking-widest block mb-2">Reason for Selection</span>

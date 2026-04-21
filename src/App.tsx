@@ -28,6 +28,7 @@ import {
   Shield,
   Bell,
   BellOff,
+  Target,
   X,
   Sun,
   Moon,
@@ -61,6 +62,7 @@ import { textToSpeech } from './services/geminiService';
 // --- Components ---
 import { SidebarItem, MetricCard, CompactMetric, LivePrice, SpeakButton } from './components/Common';
 import { MarketTicker } from './components/MarketTicker';
+import { StrategyTuner } from './components/StrategyTuner';
 import { AlertModal, CompareModal, LessonModal, FeedbackModal } from './components/Modals';
 import { VoiceAgent } from './components/VoiceAgent';
 import { TagManager } from './components/TagManager';
@@ -111,6 +113,7 @@ export default function App() {
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isStrategyTunerOpen, setIsStrategyTunerOpen] = useState(false);
   const [lastRefreshed, setLastRefreshed] = useState<string>(new Date().toLocaleTimeString());
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [movementThreshold, setMovementThreshold] = useState(1.5);
@@ -305,7 +308,7 @@ export default function App() {
       } finally {
         setIsRefreshing(false);
       }
-    }, 60000); // Refresh every 60 seconds
+    }, 30000); // Refresh every 30 seconds
 
     return () => clearInterval(interval);
   }, [watchlist, result]);
@@ -466,7 +469,7 @@ export default function App() {
     if (!searchQuery.trim()) return;
 
     setLoading(true);
-    const res = await analyzeQuery(searchQuery);
+    const res = await analyzeQuery(searchQuery, userProfile?.investorProfile);
     setResult(res);
     setLoading(false);
     
@@ -958,6 +961,13 @@ export default function App() {
               </div>
             </div>
 
+            <button 
+              onClick={() => setIsStrategyTunerOpen(true)}
+              className="px-4 py-2 bg-green-500 text-white text-[10px] font-black uppercase tracking-widest rounded-xl hover:bg-green-600 transition-all shadow-lg shadow-green-500/20 flex items-center gap-2"
+            >
+              <Target size={14} />
+              Investor DNA
+            </button>
             <button 
               onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
               className="p-2 bg-foreground/5 rounded-xl hover:bg-foreground/10 transition-all border border-border text-gray-500 hover:text-foreground"
@@ -1591,7 +1601,7 @@ export default function App() {
                 animate={{ opacity: 1, y: 0 }}
                 className="max-w-6xl mx-auto space-y-8 pb-20"
               >
-                <MarketInsightsView />
+                <MarketInsightsView profile={userProfile?.investorProfile} />
               </motion.div>
             )}
 
@@ -1857,6 +1867,17 @@ The NGX is dominated by a few key sectors. A well-diversified portfolio should t
           </Suspense>
         </div>
       </main>
+      <AnimatePresence>
+        {isStrategyTunerOpen && (
+          <StrategyTuner 
+            profile={userProfile?.investorProfile || { style: 'growth_seeker', riskAppetite: 'moderate', sectors: ['Banking', 'Industrial Goods'] }}
+            onChange={(profile) => {
+              handleUpdateProfile({ investorProfile: profile });
+            }}
+            onClose={() => setIsStrategyTunerOpen(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   );
 }

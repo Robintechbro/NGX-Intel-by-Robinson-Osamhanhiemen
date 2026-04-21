@@ -36,6 +36,8 @@ export const MarketOverviewView = ({ onSectorClick, onStockClick }: { onSectorCl
       setLoading(false);
     };
     fetchOverview();
+    const interval = setInterval(fetchOverview, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {

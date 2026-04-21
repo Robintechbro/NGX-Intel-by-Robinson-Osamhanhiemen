@@ -25,6 +25,8 @@ export const MarketStatusView = () => {
       setLoading(false);
     };
     fetchTrends();
+    const interval = setInterval(fetchTrends, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   if (loading) {

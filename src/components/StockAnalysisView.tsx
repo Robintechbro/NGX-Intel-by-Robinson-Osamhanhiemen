@@ -15,7 +15,8 @@ import {
   MousePointer2,
   Trash2,
   Calendar,
-  Sparkles
+  Sparkles,
+  Target
 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -57,6 +58,8 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
   const [chartData, setChartData] = useState(data);
   const [showMACD, setShowMACD] = useState(false);
   const [showRSI, setShowRSI] = useState(false);
+  const [showSMA, setShowSMA] = useState(false);
+  const [showEMA, setShowEMA] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   const [macdConfig, setMacdConfig] = useState(() => {
@@ -66,6 +69,10 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
   const [rsiConfig, setRsiConfig] = useState(() => {
     const saved = localStorage.getItem('rsi_config');
     return saved ? JSON.parse(saved) : { period: 14 };
+  });
+  const [maConfig, setMaConfig] = useState(() => {
+    const saved = localStorage.getItem('ma_config');
+    return saved ? JSON.parse(saved) : { sma: 20, ema: 50 };
   });
 
   // Persist indicator settings
@@ -77,9 +84,14 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
     localStorage.setItem('rsi_config', JSON.stringify(rsiConfig));
   }, [rsiConfig]);
 
+  useEffect(() => {
+    localStorage.setItem('ma_config', JSON.stringify(maConfig));
+  }, [maConfig]);
+
   const resetIndicators = () => {
     setMacdConfig({ fast: 12, slow: 26, signal: 9 });
     setRsiConfig({ period: 14 });
+    setMaConfig({ sma: 20, ema: 50 });
     toast.info("Indicator parameters reset to defaults");
   };
 
@@ -299,15 +311,31 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
 
     const rsiValues = calculateRSI(prices, rsiConfig.period);
 
+    const calculateSMA = (values: number[], period: number) => {
+      let sma = new Array(values.length).fill(null);
+      if (values.length < period) return sma;
+      for (let i = period - 1; i < values.length; i++) {
+        const sum = values.slice(i - period + 1, i + 1).reduce((a, b) => a + b, 0);
+        sma[i] = sum / period;
+      }
+      return sma;
+    };
+
+    const smaValues = calculateSMA(prices, maConfig.sma);
+    const emaValues = calculateEMA(prices, maConfig.ema);
+
     return chartData.map((d, i) => ({
       ...d,
       macd: macdLine[i],
       signal: signalLine[i],
       histogram: histogram[i],
       histogramColor: histogram[i] >= 0 ? '#22C55E' : '#EF4444',
-      rsi: rsiValues[i]
+      rsi: rsiValues[i],
+      sma: smaValues[i],
+      ema: emaValues[i],
+      volumeColor: i === 0 || d.price >= chartData[i-1].price ? '#22C55E' : '#EF4444'
     }));
-  }, [chartData, macdConfig, rsiConfig]);
+  }, [chartData, macdConfig, rsiConfig, maConfig]);
 
   return (
     <div className="space-y-6 mt-8 pt-8 border-t border-border">
@@ -391,6 +419,24 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
               )}
             >
               RSI
+            </button>
+            <button 
+              onClick={() => setShowSMA(!showSMA)}
+              className={cn(
+                "px-2 py-1 text-[10px] font-bold rounded border transition-all",
+                showSMA ? "bg-orange-500/10 text-orange-500 border-orange-500/30" : "text-gray-500 border-border hover:border-gray-400"
+              )}
+            >
+              SMA
+            </button>
+            <button 
+              onClick={() => setShowEMA(!showEMA)}
+              className={cn(
+                "px-2 py-1 text-[10px] font-bold rounded border transition-all",
+                showEMA ? "bg-indigo-500/10 text-indigo-500 border-indigo-500/30" : "text-gray-500 border-border hover:border-gray-400"
+              )}
+            >
+              EMA
             </button>
             <button 
               onClick={() => setShowSettings(!showSettings)}
@@ -477,6 +523,29 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
               />
             </div>
           </div>
+          <div className="space-y-3">
+            <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">MA Parameters</h4>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-[8px] text-gray-500 uppercase block mb-1">SMA Period</label>
+                <input 
+                  type="number" 
+                  value={maConfig.sma}
+                  onChange={(e) => setMaConfig({ ...maConfig, sma: parseInt(e.target.value) || 1 })}
+                  className="w-full bg-background border border-border rounded p-1 text-xs"
+                />
+              </div>
+              <div>
+                <label className="text-[8px] text-gray-500 uppercase block mb-1">EMA Period</label>
+                <input 
+                  type="number" 
+                  value={maConfig.ema}
+                  onChange={(e) => setMaConfig({ ...maConfig, ema: parseInt(e.target.value) || 1 })}
+                  className="w-full bg-background border border-border rounded p-1 text-xs"
+                />
+              </div>
+            </div>
+          </div>
         </motion.div>
       )}
 
@@ -516,6 +585,12 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
                 tickFormatter={(val) => `₦${val}`}
                 domain={['auto', 'auto']}
               />
+              <YAxis 
+                yAxisId="volume"
+                orientation="right"
+                hide
+                domain={[0, (data: any) => Math.max(...data.map((d: any) => d.volume || 0)) * 5]}
+              />
               <Tooltip 
                 content={({ active, payload, label }) => {
                   if (active && payload && payload.length) {
@@ -554,6 +629,20 @@ export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, histori
                 fill="url(#colorPrice)" 
                 animationDuration={1500}
               />
+
+              {showSMA && <Line type="monotone" dataKey="sma" name={`SMA (${maConfig.sma})`} stroke="#F97316" dot={false} strokeWidth={1.5} animationDuration={1000} />}
+              {showEMA && <Line type="monotone" dataKey="ema" name={`EMA (${maConfig.ema})`} stroke="#6366F1" dot={false} strokeWidth={1.5} animationDuration={1000} />}
+
+              <Bar 
+                dataKey="volume" 
+                name="Volume" 
+                yAxisId="volume"
+                opacity={0.3}
+              >
+                {indicatorsData.map((entry, index) => (
+                  <Cell key={`cell-${index}`} fill={entry.volumeColor} />
+                ))}
+              </Bar>
 
               {/* Trendlines */}
               {trendlines.map(line => (
@@ -827,6 +916,53 @@ export const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, 
               </div>
             )}
           </div>
+
+          {stock.alphaMatch !== undefined && (
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              className="mb-8 p-6 bg-indigo-500/10 border border-indigo-500/20 rounded-3xl relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <Target size={120} className="text-indigo-500" />
+              </div>
+              <div className="relative z-10 flex flex-col md:flex-row gap-6 items-center">
+                <div className="flex flex-col items-center justify-center shrink-0">
+                  <div className="relative w-24 h-24 flex items-center justify-center">
+                    <svg className="w-full h-full transform -rotate-90">
+                      <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-indigo-500/10" />
+                      <circle 
+                        cx="48" 
+                        cy="48" 
+                        r="40" 
+                        stroke="currentColor" 
+                        strokeWidth="8" 
+                        fill="transparent" 
+                        strokeDasharray={2 * Math.PI * 40}
+                        strokeDashoffset={2 * Math.PI * 40 * (1 - stock.alphaMatch / 100)}
+                        className="text-indigo-500 transition-all duration-1000 ease-out"
+                        strokeLinecap="round"
+                      />
+                    </svg>
+                    <div className="absolute inset-0 flex flex-col items-center justify-center">
+                      <span className="text-2xl font-black text-indigo-500 leading-none">{stock.alphaMatch}%</span>
+                      <span className="text-[8px] font-black uppercase text-indigo-500/60 mt-1 tracking-widest">Match</span>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <div className="flex items-center gap-2 mb-2 font-black text-indigo-500 text-[10px] uppercase tracking-[0.2em]">
+                    <Zap size={14} className="fill-indigo-500" />
+                    Personalized Strategy Alignment
+                  </div>
+                  <h3 className="text-xl font-bold mb-2">Alpha Intelligence Fit</h3>
+                  <p className="text-sm text-gray-500 leading-relaxed italic">
+                    "{stock.alphaReasoning}"
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           <div className="flex flex-wrap items-center gap-4 pt-4 border-t border-white/5">
             {stock.lastUpdated && (
