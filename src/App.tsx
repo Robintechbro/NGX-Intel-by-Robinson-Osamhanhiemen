@@ -5,6 +5,7 @@
 
 import React, { useState, useEffect, lazy, Suspense, useMemo } from 'react';
 import { 
+  Trophy,
   Search, 
   TrendingUp, 
   TrendingDown,
@@ -45,7 +46,7 @@ import {
   Menu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { analyzeQuery, refreshStocks, getMarketTrends } from './services/geminiService';
+import { getMarketTrends, refreshStocks, analyzeQuery, getTopGradedStocks } from './services/geminiService';
 import { SearchResult, StockData, PriceAlert, MarketTrends, UserProfile, AppNotification } from './types';
 import { cn, parsePrice, parsePercent } from './lib/utils';
 import { Toaster, toast } from 'sonner';
@@ -67,12 +68,15 @@ import { AlertModal, CompareModal, LessonModal, FeedbackModal } from './componen
 import { VoiceAgent } from './components/VoiceAgent';
 import { TagManager } from './components/TagManager';
 
-// --- Lazy Loaded Views ---
-const StockAnalysisView = lazy(() => import('./components/StockAnalysisView').then(m => ({ default: m.StockAnalysisView })));
+// --- Views ---
+import { MarketOverviewView } from './components/MarketOverviewView';
+import { LiveMarketBoardView } from './components/LiveMarketBoardView';
+import { StockGradingView } from './components/StockGradingView';
+import { StockAnalysisView } from './components/StockAnalysisView';
+
+// --- Lazy Loaded Views (Secondary) ---
 const ProfileView = lazy(() => import('./components/ProfileView').then(m => ({ default: m.ProfileView })));
 const MarketStatusView = lazy(() => import('./components/MarketStatusView').then(m => ({ default: m.MarketStatusView })));
-const MarketOverviewView = lazy(() => import('./components/MarketOverviewView').then(m => ({ default: m.MarketOverviewView })));
-const LiveMarketBoardView = lazy(() => import('./components/LiveMarketBoardView').then(m => ({ default: m.LiveMarketBoardView })));
 const SearchResultsView = lazy(() => import('./components/SearchResultsView').then(m => ({ default: m.SearchResultsView })));
 const MarketInsightsView = lazy(() => import('./components/MarketInsightsView').then(m => ({ default: m.MarketInsightsView })));
 
@@ -213,6 +217,23 @@ export default function App() {
       if (unsubProfile) unsubProfile();
     };
   }, [guestId]);
+
+  // Eager fetching for faster tab transitions
+  useEffect(() => {
+    if (!isAuthLoading) {
+      const prefetch = async () => {
+        try {
+          if (!marketTrends) {
+            const trends = await getMarketTrends();
+            setMarketTrends(trends);
+          }
+        } catch (e) {
+          console.error("Eager fetch failed", e);
+        }
+      };
+      prefetch();
+    }
+  }, [isAuthLoading, marketTrends]);
 
   const isAdmin = false; // Admin features disabled for open app
 
@@ -626,8 +647,42 @@ export default function App() {
 
   if (isAuthLoading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-background">
-        <Loader2 className="animate-spin text-green-500" size={48} />
+      <div className="flex items-center justify-center min-h-screen bg-background overflow-hidden">
+        <div className="relative">
+          <motion.div 
+            animate={{ 
+              scale: [1, 1.2, 1],
+              opacity: [0.1, 0.3, 0.1]
+            }}
+            transition={{ duration: 3, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute inset-0 bg-green-500 rounded-full blur-[80px] -m-20"
+          />
+          <div className="relative flex flex-col items-center gap-8">
+            <motion.div 
+              initial={{ y: 20, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              className="w-24 h-24 bg-green-500 rounded-[2.5rem] flex items-center justify-center shadow-2xl shadow-green-500/20 border border-white/10"
+            >
+              <Zap className="text-white fill-current animate-pulse" size={48} />
+            </motion.div>
+            <div className="space-y-4 text-center">
+              <h1 className="text-2xl font-black tracking-tighter uppercase whitespace-nowrap">NGX Intelligence</h1>
+              <div className="flex items-center justify-center gap-3">
+                <div className="flex gap-1.5">
+                   {[0, 1, 2].map(i => (
+                     <motion.div 
+                       key={i}
+                       animate={{ scale: [1, 1.5, 1], opacity: [0.4, 1, 0.4] }}
+                       transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
+                       className="w-1.5 h-1.5 rounded-full bg-green-500"
+                     />
+                   ))}
+                </div>
+                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-[0.4em] translate-x-1">Connecting Alpha</p>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -826,6 +881,12 @@ export default function App() {
             onClick={() => setActiveTab('trends')} 
           />
           <SidebarItem 
+            icon={Trophy} 
+            label="Elite 10" 
+            active={activeTab === 'rankings'} 
+            onClick={() => setActiveTab('rankings')} 
+          />
+          <SidebarItem 
             icon={Zap} 
             label="Market Insights" 
             active={activeTab === 'insights'} 
@@ -997,8 +1058,15 @@ export default function App() {
         <MarketTicker />
 
         {/* Scrollable Area */}
-        <div className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar">
-          <Suspense fallback={<div className="flex justify-center py-20"><Loader2 className="animate-spin text-green-500" size={40} /></div>}>
+        <div className="flex-1 overflow-y-auto p-4 lg:p-8 custom-scrollbar relative">
+          <Suspense fallback={
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-background/50 backdrop-blur-sm z-50">
+              <div className="w-12 h-12 bg-green-500/10 rounded-2xl flex items-center justify-center mb-4">
+                <Loader2 className="animate-spin text-green-500" size={24} />
+              </div>
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest animate-pulse">Syncing Market View</p>
+            </div>
+          }>
             <AnimatePresence mode="wait">
             {activeTab === 'dashboard' && (
               <motion.div 
@@ -1123,6 +1191,20 @@ export default function App() {
                 className="max-w-6xl mx-auto pb-20"
               >
                 <MarketStatusView />
+              </motion.div>
+            )}
+
+            {activeTab === 'rankings' && (
+              <motion.div 
+                key="rankings"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="max-w-7xl mx-auto pb-20"
+              >
+                <StockGradingView 
+                   profile={userProfile?.investorProfile} 
+                   onSelect={(symbol) => handleSearch(undefined, symbol)}
+                />
               </motion.div>
             )}
 
