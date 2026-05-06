@@ -15,7 +15,6 @@ import { cn } from '../lib/utils';
 import { StockData, SearchResult } from '../types';
 import ReactMarkdown from 'react-markdown';
 import { StockAnalysisView } from './StockAnalysisView';
-import { SpeakButton } from './Common';
 
 export const SearchResultsView = ({ 
   result, 
@@ -71,7 +70,6 @@ export const SearchResultsView = ({
                 <Zap size={20} className="text-yellow-500" />
                 AI Comparison Verdict
               </h3>
-              <SpeakButton text={result.message || ""} />
             </div>
             <div className="prose prose-invert max-w-none text-gray-500 leading-relaxed">
               <ReactMarkdown>{result.message || ""}</ReactMarkdown>

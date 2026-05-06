@@ -52,7 +52,7 @@ import {
   Cell
 } from 'recharts';
 import ReactMarkdown from 'react-markdown';
-import { MetricCard, CompactMetric, LivePrice, SpeakButton } from './Common';
+import { MetricCard, CompactMetric, LivePrice } from './Common';
 
 export const StockChart = ({ symbol, data = [], timeframe, setTimeframe, historicalData }: { symbol: string, data: any[], timeframe: string, setTimeframe: (tf: string) => void, historicalData?: { [key: string]: any[] } }) => {
   const [chartData, setChartData] = useState(data);
@@ -878,7 +878,6 @@ export const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, 
                   More Info
                 </button>
               )}
-              <SpeakButton text={stock.aiSummary} />
               <button 
                 onClick={() => onWatch(stock)}
                 className="p-3 bg-foreground/5 rounded-xl hover:bg-foreground/10 transition-all border border-border"
@@ -1075,7 +1074,6 @@ export const StockAnalysisView = ({ stock, compact = false, onWatch, isWatched, 
               <Zap size={20} className="text-yellow-500" />
               AI Intelligence Report
             </h3>
-            <SpeakButton text={stock.aiSummary} />
           </div>
           <div className="prose prose-invert max-w-none text-gray-500 leading-relaxed">
             <ReactMarkdown>{stock.aiSummary}</ReactMarkdown>

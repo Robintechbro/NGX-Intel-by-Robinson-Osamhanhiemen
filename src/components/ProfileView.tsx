@@ -244,7 +244,6 @@ export const ProfileView = ({
               "Unlimited Watchlist Items",
               "Advanced Technical Indicators",
               "Priority Market Alerts",
-              "Voice Agent Access",
               "Ad-free Experience"
             ].map((benefit, i) => (
               <li key={i} className="flex items-center gap-3 text-sm text-gray-500">

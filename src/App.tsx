@@ -36,10 +36,7 @@ import {
   Lock,
   LogOut,
   CreditCard,
-  Mic,
   Bot,
-  Volume2,
-  VolumeX,
   Pause,
   Play,
   MessageSquare,
@@ -58,27 +55,26 @@ import {
   updateProfile
 } from './firebase';
 import { doc, getDoc, setDoc, updateDoc, increment, onSnapshot, collection, addDoc, serverTimestamp, query as firestoreQuery, where, orderBy, deleteDoc } from 'firebase/firestore';
-import { textToSpeech } from './services/geminiService';
 
 // --- Components ---
-import { SidebarItem, MetricCard, CompactMetric, LivePrice, SpeakButton } from './components/Common';
+import { SidebarItem, MetricCard, CompactMetric, LivePrice } from './components/Common';
 import { MarketTicker } from './components/MarketTicker';
-import { StrategyTuner } from './components/StrategyTuner';
 import { AlertModal, CompareModal, LessonModal, FeedbackModal } from './components/Modals';
-import { VoiceAgent } from './components/VoiceAgent';
 import { TagManager } from './components/TagManager';
 
 // --- Views ---
 import { MarketOverviewView } from './components/MarketOverviewView';
-import { LiveMarketBoardView } from './components/LiveMarketBoardView';
-import { StockGradingView } from './components/StockGradingView';
-import { StockAnalysisView } from './components/StockAnalysisView';
 
-// --- Lazy Loaded Views (Secondary) ---
+// --- Lazy Loaded Views ---
 const ProfileView = lazy(() => import('./components/ProfileView').then(m => ({ default: m.ProfileView })));
 const MarketStatusView = lazy(() => import('./components/MarketStatusView').then(m => ({ default: m.MarketStatusView })));
 const SearchResultsView = lazy(() => import('./components/SearchResultsView').then(m => ({ default: m.SearchResultsView })));
 const MarketInsightsView = lazy(() => import('./components/MarketInsightsView').then(m => ({ default: m.MarketInsightsView })));
+const LiveMarketBoardView = lazy(() => import('./components/LiveMarketBoardView').then(m => ({ default: m.LiveMarketBoardView })));
+const StockGradingView = lazy(() => import('./components/StockGradingView').then(m => ({ default: m.StockGradingView })));
+const StockAnalysisView = lazy(() => import('./components/StockAnalysisView').then(m => ({ default: m.StockAnalysisView })));
+const StrategyTuner = lazy(() => import('./components/StrategyTuner').then(m => ({ default: m.StrategyTuner })));
+const AcademyView = lazy(() => import('./components/AcademyView').then(m => ({ default: m.AcademyView })));
 
 // --- Helpers ---
 
@@ -166,7 +162,6 @@ export default function App() {
   const [selectedWatchlistTag, setSelectedWatchlistTag] = useState<string | null>(null);
   const [marketTrends, setMarketTrends] = useState<MarketTrends | null>(null);
   const [isTrendsLoading, setIsTrendsLoading] = useState(false);
-  const [isListening, setIsListening] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const saved = localStorage.getItem('ngx-intel-theme');
@@ -505,48 +500,6 @@ export default function App() {
     else if (res.type === 'error') setActiveTab('dashboard');
   };
 
-  const handleVoiceSearch = () => {
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    
-    if (!SpeechRecognition) {
-      toast.error("Voice search is not supported in your browser.");
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'en-US';
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      setIsListening(true);
-      toast.info("Listening... Speak now.");
-    };
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setQuery(transcript);
-      setIsListening(false);
-      toast.success(`Heard: "${transcript}"`);
-      handleSearch(undefined, transcript);
-    };
-
-    recognition.onerror = (event: any) => {
-      setIsListening(false);
-      console.error("Speech recognition error", event.error);
-      if (event.error === 'not-allowed') {
-        toast.error("Microphone access denied. Please enable it in your browser settings.");
-      } else {
-        toast.error("Could not recognize speech. Please try again.");
-      }
-    };
-
-    recognition.onend = () => {
-      setIsListening(false);
-    };
-
-    recognition.start();
-  };
 
   const handleViewDetails = (stock: StockData) => {
     setQuery(`Analyze ${stock.symbol}`);
@@ -715,11 +668,6 @@ export default function App() {
         isOpen={isLessonModalOpen} 
         onClose={() => setIsLessonModalOpen(false)} 
         lesson={selectedLesson} 
-      />
-      <VoiceAgent 
-        isListening={isListening} 
-        startListening={handleVoiceSearch} 
-        onCommand={(cmd) => handleSearch(undefined, cmd)} 
       />
 
       {/* Mobile Menu Overlay */}
@@ -957,20 +905,8 @@ export default function App() {
                 onChange={(e) => setQuery(e.target.value)}
               />
               <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                {loading ? (
+                {loading && (
                   <Loader2 className="animate-spin text-green-500" size={18} />
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleVoiceSearch}
-                    className={cn(
-                      "p-1.5 rounded-full transition-all duration-300",
-                      isListening ? "bg-green-500 text-white animate-pulse" : "text-gray-500 hover:text-green-500 hover:bg-green-500/10"
-                    )}
-                    title="Voice Search"
-                  >
-                    <Mic size={18} />
-                  </button>
                 )}
               </div>
             </form>
@@ -1692,242 +1628,14 @@ export default function App() {
                 key="academy"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="max-w-6xl mx-auto space-y-8 lg:space-y-12 pb-20"
+                className="max-w-6xl mx-auto"
               >
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 sm:gap-0">
-                  <div>
-                    <h2 className="text-2xl md:text-4xl font-bold mb-2">Investor Academy</h2>
-                    <p className="text-gray-500 text-sm md:text-lg">Master the art of investing in the Nigerian stock market (NGX).</p>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  {[
-                    { 
-                      title: 'NGX Basics: Getting Started', 
-                      desc: 'The foundation of your investment journey in Nigeria.', 
-                      icon: <BookOpen size={24} />, 
-                      level: 'Beginner', 
-                      time: '7 min read', 
-                      content: "To start investing on the NGX, you need three things: 1. A CSCS (Central Securities Clearing System) account, which acts as your digital vault for shares. 2. A stockbroker licensed by the SEC. 3. Capital.",
-                      fullContent: `
-### How to Get Started with NGX Investment
-
-Investing in the Nigerian Stock Exchange (NGX) is one of the most effective ways to build long-term wealth in Nigeria. Whether you're a student, a professional, or a business owner, the market offers opportunities for everyone.
-
-#### Step 1: Understand the Requirements
-To start your journey, you need three fundamental things:
-1. **CSCS Account:** The Central Securities Clearing System (CSCS) is the "digital vault" where all your shares are stored. You don't get physical paper certificates anymore; everything is electronic.
-2. **Stockbroker:** You cannot buy shares directly from the NGX. You must go through a licensed stockbroking firm. They act as intermediaries between you and the exchange.
-3. **Bank Account & BVN:** You'll need a Nigerian bank account and your Bank Verification Number (BVN) for identity verification.
-
-#### Step 2: Choose Your Platform
-In the past, you had to visit a physical office to trade. Today, you can use modern apps like:
-*   **Bamboo, Chaka, or Trove:** These apps allow you to buy NGX stocks alongside US stocks.
-*   **Traditional Broker Apps:** Many top brokers like Stanbic IBTC Stockbrokers or CardinalStone have their own mobile apps.
-
-#### Step 3: Fund Your Account and Start Small
-You don't need millions to start. Many stocks on the NGX trade for less than ₦50 per share. The minimum units you can buy is usually 100. 
-
-**Pro Tip:** Start with "Blue Chip" companies—large, stable companies with a history of profit, like GTCO, Zenith Bank, or Dangote Cement.
-                      `
-                    },
-                    { 
-                      title: 'Fundamental Analysis: The NGX Way', 
-                      desc: 'How to pick winning companies by looking at their numbers.', 
-                      icon: <BarChart3 size={24} />, 
-                      level: 'Intermediate', 
-                      time: '10 min read', 
-                      content: "In the Nigerian market, focus on: 1. Dividend Yield (aim for 8-15% for top banks). 2. P/E Ratio (NGX average is often lower than US markets, look for under 10x). 3. Earnings Growth.",
-                      fullContent: `
-### Fundamental Analysis in the Nigerian Market
-
-Fundamental analysis is the process of looking at a business's health to determine if its stock is a good investment. In Nigeria, certain metrics carry more weight than others.
-
-#### 1. Dividend Yield (Passive Income)
-Nigerian investors love dividends. The "Dividend Yield" tells you how much a company pays out in dividends relative to its share price. 
-*   **What to look for:** Aim for yields between 8% and 15%. Top tier banks like Zenith and GTCO are famous for high yields.
-
-#### 2. P/E Ratio (Price-to-Earnings)
-The P/E ratio tells you how much you are paying for every ₦1 of profit the company makes. 
-*   **The NGX Context:** While US tech stocks might have P/E ratios of 50x, many solid Nigerian companies trade at 3x to 8x. This often means they are "undervalued" or cheap.
-
-#### 3. Earnings Per Share (EPS) Growth
-Is the company making more money this year than last year? Consistent EPS growth over 3-5 years is a sign of a healthy, growing business.
-
-#### 4. The "Tier 1" Factor
-In the banking sector, look for "FUGAZ" (First Bank, UBA, GTCO, Access, Zenith). these are the Tier 1 banks that dominate the market and are generally considered safer bets.
-                      `
-                    },
-                    { 
-                      title: 'Dividend Aristocrats of Nigeria', 
-                      desc: 'Building a passive income stream with the most reliable payers.', 
-                      icon: <Zap size={24} />, 
-                      level: 'Beginner', 
-                      time: '8 min read', 
-                      content: "Nigerian 'Dividend Aristocrats' are companies that have paid dividends consistently for years. Top names include Zenith Bank, GTCO, Dangote Cement, and MTN Nigeria.",
-                      fullContent: `
-### Building Wealth with Nigerian Dividend Aristocrats
-
-A "Dividend Aristocrat" is a company that has a long and reliable history of paying dividends to its shareholders. In Nigeria, dividends are a primary driver of stock market returns.
-
-#### Why Dividends Matter in Nigeria
-With high inflation, receiving cash payouts twice a year (Interim and Final dividends) helps investors maintain liquidity and reinvest for compound growth.
-
-#### Top Dividend Payers to Watch
-1. **Zenith Bank & GTCO:** These are the kings of dividends in the banking sector. They have never missed a payout in over a decade.
-2. **Dangote Cement:** As the largest company on the NGX, it pays massive dividends due to its dominant market position.
-3. **MTN Nigeria:** A "cash cow" in the telecoms sector with high margins and consistent payouts.
-4. **Nestle Nigeria:** A favorite for defensive investors who want stability and regular income.
-
-#### The Dividend Calendar
-*   **Interim Dividends:** Usually paid around August/September based on half-year results.
-*   **Final Dividends:** Usually paid around April/May after the full-year audited results are released at the Annual General Meeting (AGM).
-                      `
-                    },
-                    { 
-                      title: 'Technical Analysis & Market Timing', 
-                      desc: 'Using charts to identify entry and exit points.', 
-                      icon: <TrendingUp size={24} />, 
-                      level: 'Advanced', 
-                      time: '12 min read', 
-                      content: "While fundamentals tell you *what* to buy, technicals tell you *when*. Watch the 50-day and 200-day Moving Averages. In the NGX, volume is a key indicator.",
-                      fullContent: `
-### Mastering Charts: Technical Analysis for the NGX
-
-Technical analysis involves studying past market data, primarily price and volume, to predict future price movements.
-
-#### 1. Moving Averages (The Trend is Your Friend)
-*   **50-Day MA:** Shows the short-term trend.
-*   **200-Day MA:** Shows the long-term "health" of the stock.
-When the price stays above the 200-day MA, the stock is in a long-term uptrend.
-
-#### 2. Support and Resistance
-*   **Support:** The price level where a stock tends to stop falling and "bounce" back up. In Nigeria, this is often where pension funds start buying.
-*   **Resistance:** The price level where a stock struggles to break above.
-
-#### 3. Volume: The Secret Ingredient
-In the NGX, volume is critical. A price increase on **low volume** is often a "fake out." A price increase on **high volume** suggests that big institutional investors are buying in, which is a strong bullish signal.
-
-#### 4. Relative Strength Index (RSI)
-RSI tells you if a stock is "Overbought" (above 70) or "Oversold" (below 30). Buying a great company when its RSI is below 30 is often a winning strategy.
-                      `
-                    },
-                    { 
-                      title: 'Inflation & Currency Hedging', 
-                      desc: 'Protecting your wealth against Naira devaluation.', 
-                      icon: <Shield size={24} />, 
-                      level: 'Intermediate', 
-                      time: '10 min read', 
-                      content: "With high inflation in Nigeria, stocks are a key hedge. Focus on companies with 'Dollar-linked' earnings, such as Seplat Energy or companies with strong export components.",
-                      fullContent: `
-### Protecting Your Wealth: Hedging Against Inflation
-
-In an environment with high inflation and currency fluctuations, simply saving cash in a bank account can lead to a loss of purchasing power. Investing in the right NGX stocks can protect you.
-
-#### 1. Asset-Rich Companies
-Companies like **Dangote Cement** or **BUA Foods** own massive physical factories and land. As the cost of building these things rises with inflation, the value of the company's assets (and its stock) tends to rise as well.
-
-#### 2. Dollar-Linked Revenues
-Some companies on the NGX earn their revenue in US Dollars but report in Naira.
-*   **Seplat Energy:** Sells oil in USD. When the Naira weakens, their Naira-reported profits skyrocket.
-*   **MTN Nigeria:** While they earn in Naira, their infrastructure costs are often USD-linked, but their dominant market position allows them to adjust pricing to protect margins.
-
-#### 3. Pricing Power
-Look for companies that can raise their prices without losing customers. Consumer goods giants like **Nestle** or **Unilever** often have this "pricing power," allowing them to pass inflation costs on to consumers and maintain profits for shareholders.
-                      `
-                    },
-                    { 
-                      title: 'Portfolio Diversification', 
-                      desc: 'Spreading risk across sectors and asset classes.', 
-                      icon: <PieChart size={24} />, 
-                      level: 'Beginner', 
-                      time: '6 min read', 
-                      content: "Don't put all your eggs in one basket. A balanced NGX portfolio might include: 40% Banking, 30% Industrial, 20% Telecoms, and 10% Consumer Goods.",
-                      fullContent: `
-### Diversification: The Only Free Lunch in Investing
-
-Diversification is the practice of spreading your investments around so that your exposure to any one type of asset is limited. This helps reduce risk.
-
-#### Sector Diversification in Nigeria
-The NGX is dominated by a few key sectors. A well-diversified portfolio should touch them all:
-1.  **Banking (The Engine):** High dividends and liquidity. (e.g., GTCO, Zenith)
-2.  **Industrial (The Builders):** Infrastructure growth. (e.g., Dangote Cement, BUA Cement)
-3.  **Consumer Goods (The Essentials):** Stability during downturns. (e.g., Nestle, Guinness)
-4.  **Telecoms (The Future):** Digital growth and data consumption. (e.g., MTN, Airtel)
-5.  **Oil & Gas (The Hedge):** Protection against currency shifts. (e.g., Seplat)
-
-#### The 5-10-20 Rule
-*   Don't put more than **20%** of your money in one sector.
-*   Don't put more than **10%** of your money in one single stock.
-*   Keep at least **5%** in cash or near-cash (like Money Market funds) to buy opportunities when the market dips.
-                      `
-                    },
-                  ].map((course, i) => (
-                    <div 
-                      key={i} 
-                      onClick={() => {
-                        setSelectedLesson(course);
-                        setIsLessonModalOpen(true);
-                      }}
-                      className="bg-card border border-border p-8 rounded-3xl transition-all group flex flex-col h-full relative hover:border-blue-500/30 cursor-pointer"
-                    >
-                      <div className="flex justify-between items-start mb-6">
-                        <div className="w-12 h-12 bg-foreground/5 rounded-2xl flex items-center justify-center text-gray-500 group-hover:text-blue-500 transition-colors">
-                          {course.icon}
-                        </div>
-                        <div className="flex flex-col items-end gap-2">
-                          <span className="px-3 py-1 bg-blue-500/10 text-blue-500 text-[10px] font-bold rounded-full border border-blue-500/20">
-                            {course.level}
-                          </span>
-                          <span className="text-[10px] text-gray-500">{course.time}</span>
-                        </div>
-                      </div>
-                      <h3 className="text-2xl font-bold mb-3 group-hover:text-blue-500 transition-colors">{course.title}</h3>
-                      <p className="text-gray-500 leading-relaxed mb-6 flex-1">{course.desc}</p>
-                      
-                      <button 
-                        className="flex items-center justify-center w-full py-4 text-xs font-bold rounded-2xl transition-all gap-2 bg-foreground/5 text-blue-500 hover:bg-blue-500 hover:text-white group-hover:bg-blue-500 group-hover:text-white"
-                      >
-                        READ FULL ARTICLE <ChevronRight size={14} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bg-card border border-border p-10 rounded-[2.5rem] relative overflow-hidden">
-                  <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 to-transparent pointer-events-none" />
-                  <div className="relative z-10">
-                    <h2 className="text-2xl font-bold mb-8 flex items-center gap-3">
-                      <Globe size={24} className="text-blue-500" />
-                      Recommended Resources
-                    </h2>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {[
-                        { name: 'NGX Official Site', url: 'https://ngxgroup.com', desc: 'Official market data, news, and listed company reports.' },
-                        { name: 'Nairametrics', url: 'https://nairametrics.com', desc: 'Leading financial news and analysis for the Nigerian market.' },
-                        { name: 'Proshare Nigeria', url: 'https://proshare.co', desc: 'Deep-dive research and professional market intelligence.' },
-                        { name: 'Investopedia', url: 'https://investopedia.com', desc: 'Global standard for financial education and terminology.' },
-                        { name: 'SEC Nigeria', url: 'https://sec.gov.ng', desc: 'Regulatory body for the Nigerian capital market.' },
-                        { name: 'TradingView', url: 'https://tradingview.com', desc: 'Best-in-class charting tools for technical analysis.' }
-                      ].map((res) => (
-                        <a 
-                          key={res.name}
-                          href={res.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="p-6 bg-foreground/5 rounded-2xl hover:bg-foreground/10 transition-all border border-border hover:border-blue-500/30 group"
-                        >
-                          <div className="flex items-center justify-between mb-3">
-                            <h4 className="font-bold group-hover:text-blue-500 transition-colors">{res.name}</h4>
-                            <ArrowUpRight size={16} className="text-gray-500 group-hover:text-blue-500 transition-all" />
-                          </div>
-                          <p className="text-xs text-gray-500 leading-relaxed">{res.desc}</p>
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                </div>
+                <AcademyView 
+                  onOpenLesson={(lesson) => {
+                    setSelectedLesson(lesson);
+                    setIsLessonModalOpen(true);
+                  }} 
+                />
               </motion.div>
             )}
 

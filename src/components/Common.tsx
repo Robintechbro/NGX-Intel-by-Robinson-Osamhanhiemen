@@ -3,14 +3,10 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Activity,
-  Volume2,
-  VolumeX,
   Loader2
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn, parsePrice } from '../lib/utils';
-import { textToSpeech } from '../services/geminiService';
-import { toast } from 'sonner';
 
 export const SidebarItem = ({ icon: Icon, label, active, onClick }: { icon: any, label: string, active?: boolean, onClick?: () => void }) => (
   <button 
@@ -130,69 +126,5 @@ export const LivePrice = ({ value, change, changePercent, size = "large" }: { va
         {change} ({changePercent})
       </div>
     </div>
-  );
-};
-
-const playAudio = (base64: string) => {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  const blob = new Blob([bytes], { type: 'audio/mp3' });
-  const url = URL.createObjectURL(blob);
-  const audio = new Audio(url);
-  audio.play();
-  return audio;
-};
-
-export const SpeakButton = ({ text }: { text: string }) => {
-  const [loading, setLoading] = useState(false);
-  const [playing, setPlaying] = useState(false);
-  const audioRef = React.useRef<HTMLAudioElement | null>(null);
-
-  const handleSpeak = async () => {
-    if (playing) {
-      audioRef.current?.pause();
-      setPlaying(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const base64 = await textToSpeech(text);
-      if (base64) {
-        audioRef.current = playAudio(base64);
-        setPlaying(true);
-        audioRef.current.onended = () => setPlaying(false);
-      } else {
-        toast.error("Speech generation failed");
-      }
-    } catch (error) {
-      console.error("TTS Error", error);
-      toast.error("Failed to generate speech");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <button 
-      onClick={handleSpeak}
-      disabled={loading}
-      className={cn(
-        "p-2 rounded-xl transition-all border border-border flex items-center gap-2 text-[10px] font-bold uppercase tracking-widest",
-        playing ? "bg-green-500 text-white border-green-500" : "bg-foreground/5 text-gray-500 hover:text-foreground hover:bg-foreground/10"
-      )}
-    >
-      {loading ? (
-        <Loader2 className="animate-spin" size={14} />
-      ) : playing ? (
-        <Volume2 size={14} />
-      ) : (
-        <VolumeX size={14} />
-      )}
-      {playing ? "Playing" : "Listen"}
-    </button>
   );
 };
